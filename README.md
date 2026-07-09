@@ -24,7 +24,7 @@
 
 - `GET /api/templates`：加载模板
 - `POST /api/upload`：上传商品图
-- `POST /api/generate`：生成主图
+- `POST /api/generate`：生成主图，返回多个导出资产
 - `GET /api/history?limit=1`：读取最近生成结果
 
 后端会自动把 `frontend/` 挂载到 `/`，所以启动后访问：
@@ -86,12 +86,13 @@ http://localhost:8000/
 
 # ProductShot AI Backend
 
-AI 商品主图工厂后端 MVP。当前版本聚焦「普通商品照片 → 平台合规白底主图」，提供上传、模板、生成、合规检测、历史记录和静态文件访问。
+AI 商品主图工厂后端 MVP。当前版本聚焦「普通商品照片 → 平台合规主图」，提供上传、模板、生成、合规检测、历史记录和静态文件访问。
 
 ## 已实现能力
 
 - 图片上传：JPG / PNG / WebP
 - 商品抠图：优先使用 `rembg`，没有可用模型时会降级为普通合成，方便本地调试
+- 一次生成多版本：当前模板图、透明 PNG、轻阴影棚拍图、2000px 高清图
 - 主图模板：Amazon 白底、Temu 主图、Shopify 主图、透明 PNG、轻阴影棚拍、移动端 4:5
 - 图片合成：自动居中、自动缩放、纯白/透明/浅灰背景、自然阴影、补光和轻微锐化
 - 合规检测：尺寸、纯白背景、商品居中、商品占比、清晰度
@@ -115,7 +116,7 @@ curl -X POST "http://localhost:8000/api/upload" \
 curl "http://localhost:8000/api/templates"
 ```
 
-### 3. 生成白底主图
+### 3. 生成主图
 
 ```bash
 curl -X POST "http://localhost:8000/api/generate" \
@@ -134,6 +135,13 @@ curl -X POST "http://localhost:8000/api/generate" \
   }'
 ```
 
+`/api/generate` 会复用同一次抠图后的商品主体，并返回多个 `assets`：
+
+- 当前模板结果，例如 `amazon-white-main`
+- `transparent-png`
+- `soft-shadow-packshot`
+- `hd-2000px`
+
 ### 4. 查看历史
 
 ```bash
@@ -147,8 +155,8 @@ curl "http://localhost:8000/api/history?limit=20"
 → 获取模板 /api/templates
 → 用户选择模板和尺寸
 → 调用 /api/generate
-→ 展示 assets[0].public_url
-→ 展示 assets[0].compliance
+→ 展示 assets[].public_url
+→ 展示主资产 assets[0].compliance
 ```
 
 生成结果里的 `compliance` 可直接渲染成合规检测卡：
