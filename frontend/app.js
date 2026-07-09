@@ -5,6 +5,7 @@ const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_UPLOAD_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 const MIN_OUTPUT_SIZE = 512;
 const MAX_OUTPUT_SIZE = 4096;
+const OUTPUT_FORMATS = new Set(['png', 'jpg', 'webp']);
 
 const state = {
   templates: [],
@@ -14,6 +15,7 @@ const state = {
   background: 'white',
   customBackgroundColor: '#F7F9FC',
   customBackgroundActive: false,
+  outputFormat: 'png',
   lastTask: null,
   localPreviewUrl: null,
   customSizeActive: false,
@@ -214,6 +216,48 @@ function updateCustomColorControls() {
   if (customButton) customButton.textContent = state.customBackgroundActive ? `自定义 ${state.customBackgroundColor}` : '自定义颜色';
 }
 
+function updateFormatControls() {
+  $all('#formatOptions button').forEach(button => {
+    button.classList.toggle('active', button.dataset.format === state.outputFormat);
+  });
+  const hint = $('#formatHint');
+  if (!hint) return;
+  if (state.background === 'transparent') {
+    hint.textContent = '透明背景已固定使用 PNG，避免透明区域丢失。';
+  } else if (state.outputFormat === 'jpg') {
+    hint.textContent = 'JPG 体积更小，但不支持透明背景，适合白底或浅色背景主图。';
+  } else if (state.outputFormat === 'webp') {
+    hint.textContent = 'WebP 适合网页展示，通常体积更小。';
+  } else {
+    hint.textContent = 'PNG 适合透明图和高质量主图。';
+  }
+}
+
+function setOutputFormat(format, options = {}) {
+  if (!OUTPUT_FORMATS.has(format)) {
+    toast('输出格式仅支持 PNG、JPG、WebP。', 'error');
+    return;
+  }
+  if (state.background === 'transparent' && format !== 'png') {
+    state.outputFormat = 'png';
+    updateFormatControls();
+    if (!options.silent) toast('透明背景需要使用 PNG，已自动切回 PNG。', 'error');
+    return;
+  }
+  state.outputFormat = format;
+  updateFormatControls();
+}
+
+function enforceOutputFormatForBackground(options = {}) {
+  if (state.background === 'transparent' && state.outputFormat !== 'png') {
+    state.outputFormat = 'png';
+    updateFormatControls();
+    if (!options.silent) toast('透明背景需要使用 PNG，已自动切回 PNG。', 'error');
+  } else {
+    updateFormatControls();
+  }
+}
+
 function setBackground(background, options = {}) {
   if (background === 'custom') {
     state.customBackgroundActive = true;
@@ -224,6 +268,7 @@ function setBackground(background, options = {}) {
   }
   updateCustomColorControls();
   syncActiveButtons();
+  enforceOutputFormatForBackground(options);
 }
 
 function setCustomBackgroundColor(value) {
@@ -237,6 +282,7 @@ function setCustomBackgroundColor(value) {
   state.background = color;
   updateCustomColorControls();
   syncActiveButtons();
+  enforceOutputFormatForBackground({ silent: true });
 }
 
 function selectTemplate(templateId) {
@@ -256,6 +302,7 @@ function selectTemplate(templateId) {
   updateCustomSizeButton();
   updateCustomColorControls();
   syncActiveButtons();
+  enforceOutputFormatForBackground({ silent: true });
 }
 
 function syncActiveButtons() {
@@ -277,6 +324,7 @@ function syncActiveButtons() {
     }
     button.classList.toggle('active', !state.customBackgroundActive && button.dataset.bg === state.background);
   });
+  updateFormatControls();
 }
 
 function setPreviewImage(url, status = '已生成') {
@@ -394,6 +442,7 @@ async function handleUpload(file) {
 }
 
 function buildGeneratePayload() {
+  enforceOutputFormatForBackground({ silent: true });
   return {
     source_image_id: state.sourceImage.id,
     template_id: state.selectedTemplateId,
@@ -404,7 +453,7 @@ function buildGeneratePayload() {
     add_shadow: $('#addShadow').checked,
     auto_enhance: $('#autoEnhance').checked,
     edge_repair: $('#edgeRepair').checked,
-    output_format: 'png',
+    output_format: state.outputFormat,
   };
 }
 
@@ -626,6 +675,12 @@ function bindEvents() {
     setCustomBackgroundColor(event.target.value);
   });
 
+  $all('#formatOptions button').forEach(button => {
+    button.addEventListener('click', () => {
+      setOutputFormat(button.dataset.format);
+    });
+  });
+
   $('#generateBtn')?.addEventListener('click', generateImage);
   $('#mobileGenerateBtn')?.addEventListener('click', generateImage);
   $('#refreshHistoryBtn')?.addEventListener('click', loadHistory);
@@ -650,6 +705,7 @@ function bindEvents() {
 async function init() {
   bindEvents();
   updateCustomColorControls();
+  updateFormatControls();
   await loadTemplates();
   await loadHistory();
 }
