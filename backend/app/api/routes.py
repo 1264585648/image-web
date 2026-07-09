@@ -29,6 +29,12 @@ CONTENT_TYPE_EXTENSIONS = {
 
 
 FRIENDLY_GENERATION_FALLBACK = "生成失败，请换一张更清晰、主体更完整、背景更干净的商品图后重试。"
+STEP_CREATED = "已创建任务，等待生成"
+STEP_LOADING = "正在读取原图"
+STEP_PREPARING = "正在抠图和增强"
+STEP_COMPOSING = "正在合成主图结果"
+STEP_FINISHED = "生成完成"
+STEP_FAILED = "生成失败"
 
 
 def _safe_extension(file: UploadFile) -> str:
@@ -116,12 +122,25 @@ def _task_to_out(task: GenerationTask) -> TaskOut:
         source_image_id=task.source_image_id,
         template_id=task.template_id,
         status=task.status,
+        progress=task.progress or 0,
+        current_step=task.current_step,
         error_message=task.error_message,
         compliance_score=task.compliance_score,
         created_at=task.created_at,
         updated_at=task.updated_at,
         assets=[_asset_to_out(asset) for asset in task.assets],
     )
+
+
+def _set_task_progress(db: Session, task: GenerationTask, *, status: str | None = None, progress: int | None = None, current_step: str | None = None) -> None:
+    if status is not None:
+        task.status = status
+    if progress is not None:
+        task.progress = min(max(progress, 0), 100)
+    if current_step is not None:
+        task.current_step = current_step
+    db.add(task)
+    db.commit()
 
 
 def _variant_requests(request: GenerateRequest, width: int, height: int) -> list[tuple[str, GenerateRequest]]:
@@ -216,10 +235,7 @@ def _run_generation_task(task_id: str) -> None:
         if task.status not in {"queued", "processing"}:
             return
 
-        task.status = "processing"
-        task.error_message = None
-        db.add(task)
-        db.commit()
+        _set_task_progress(db, task, status="processing", progress=8, current_step=STEP_LOADING)
 
         request = GenerateRequest.model_validate_json(task.request_json)
         source = db.get(SourceImage, task.source_image_id)
@@ -229,14 +245,20 @@ def _run_generation_task(task_id: str) -> None:
         width = request.width or template.width
         height = request.height or template.height
 
+        _set_task_progress(db, task, status="processing", progress=20, current_step=STEP_PREPARING)
         subject = prepare_subject(
             source.file_path,
             edge_repair=request.edge_repair,
             auto_enhance=request.auto_enhance,
         )
         primary_score: float | None = None
+        variants = _variant_requests(request, width, height)
+        total_variants = max(len(variants), 1)
 
-        for output_type, variant_request in _variant_requests(request, width, height):
+        for index, (output_type, variant_request) in enumerate(variants, start=1):
+            progress = 35 + int((index - 1) / total_variants * 50)
+            _set_task_progress(db, task, status="processing", progress=progress, current_step=f"{STEP_COMPOSING}（{index}/{total_variants}）")
+
             fmt = variant_request.output_format.lower().replace("jpeg", "jpg")
             variant_width = variant_request.width or width
             variant_height = variant_request.height or height
@@ -257,8 +279,11 @@ def _run_generation_task(task_id: str) -> None:
             if primary_score is None:
                 primary_score = report.score
             db.add(asset)
+            db.commit()
 
         task.status = "success"
+        task.progress = 100
+        task.current_step = STEP_FINISHED
         task.compliance_score = primary_score
         task.error_message = None
         db.add(task)
@@ -270,6 +295,8 @@ def _run_generation_task(task_id: str) -> None:
         failed_task = db.query(GenerationTask).filter(GenerationTask.id == task_id).first()
         if failed_task is not None:
             failed_task.status = "failed"
+            failed_task.progress = max(failed_task.progress or 0, 1)
+            failed_task.current_step = STEP_FAILED
             failed_task.error_message = _friendly_generation_error(exc)
             db.add(failed_task)
             db.commit()
@@ -347,6 +374,8 @@ def generate_image(request: GenerateRequest, background_tasks: BackgroundTasks, 
         source_image_id=source.id,
         template_id=template.id,
         status="queued",
+        progress=0,
+        current_step=STEP_CREATED,
         request_json=request.model_dump_json(),
     )
     db.add(task)
