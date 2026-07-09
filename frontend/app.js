@@ -285,6 +285,24 @@ function setCustomBackgroundColor(value) {
   enforceOutputFormatForBackground({ silent: true });
 }
 
+function updateDownloadAllButton(task = state.lastTask) {
+  const button = $('#downloadAllBtn');
+  if (!button) return;
+  const canDownload = Boolean(task?.id && task.assets?.length);
+  button.disabled = !canDownload;
+  button.textContent = canDownload ? `下载全部 ${task.assets.length} 张` : '下载全部';
+}
+
+function handleDownloadAll() {
+  const task = state.lastTask;
+  if (!task?.id || !task.assets?.length) {
+    toast('当前没有可下载的生成结果。', 'error');
+    updateDownloadAllButton(null);
+    return;
+  }
+  window.location.href = `${API_BASE}/api/tasks/${encodeURIComponent(task.id)}/download.zip`;
+}
+
 function selectTemplate(templateId) {
   state.selectedTemplateId = templateId;
   const template = state.templates.find(item => item.id === templateId);
@@ -467,6 +485,7 @@ async function generateImage() {
   const mobileButton = $('#mobileGenerateBtn');
   button.disabled = true;
   mobileButton.disabled = true;
+  updateDownloadAllButton(null);
   button.textContent = '生成中...';
   mobileButton.textContent = '生成中...';
   $('#generatedBadge').textContent = '生成中';
@@ -489,6 +508,7 @@ async function generateImage() {
   } catch (error) {
     $('#generatedBadge').className = 'generated-badge error';
     $('#generatedBadge').textContent = '生成失败';
+    updateDownloadAllButton(null);
     toast(error.message, 'error');
   } finally {
     button.disabled = false;
@@ -508,6 +528,7 @@ function renderTask(task) {
   if (asset?.public_url) setPreviewImage(asset.public_url, '已生成');
   renderResults(task.assets || []);
   renderCompliance(asset?.compliance, task.compliance_score);
+  updateDownloadAllButton(task);
 }
 
 function sortedAssets(assets) {
@@ -605,10 +626,14 @@ async function loadHistory() {
       state.lastTask = last;
       renderTask(last);
     } else {
+      state.lastTask = null;
       renderResults([]);
+      updateDownloadAllButton(null);
     }
   } catch (_) {
+    state.lastTask = null;
     renderResults([]);
+    updateDownloadAllButton(null);
   }
 }
 
@@ -684,6 +709,7 @@ function bindEvents() {
   $('#generateBtn')?.addEventListener('click', generateImage);
   $('#mobileGenerateBtn')?.addEventListener('click', generateImage);
   $('#refreshHistoryBtn')?.addEventListener('click', loadHistory);
+  $('#downloadAllBtn')?.addEventListener('click', handleDownloadAll);
 
   $all('#previewTabs button').forEach(button => {
     button.addEventListener('click', () => {
@@ -706,6 +732,7 @@ async function init() {
   bindEvents();
   updateCustomColorControls();
   updateFormatControls();
+  updateDownloadAllButton(null);
   await loadTemplates();
   await loadHistory();
 }
