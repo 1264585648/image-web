@@ -143,6 +143,22 @@ def _set_task_progress(db: Session, task: GenerationTask, *, status: str | None 
     db.commit()
 
 
+def _create_generation_task(db: Session, request: GenerateRequest, template_id: str) -> GenerationTask:
+    task = GenerationTask(
+        id=str(uuid4()),
+        source_image_id=request.source_image_id,
+        template_id=template_id,
+        status="queued",
+        progress=0,
+        current_step=STEP_CREATED,
+        request_json=request.model_dump_json(),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
 def _variant_requests(request: GenerateRequest, width: int, height: int) -> list[tuple[str, GenerateRequest]]:
     """Return the product outputs shown in the UI while avoiding duplicate renders."""
     template = get_template(request.template_id)
@@ -369,18 +385,35 @@ def generate_image(request: GenerateRequest, background_tasks: BackgroundTasks, 
     except KeyError as exc:
         raise HTTPException(status_code=400, detail="模板不存在，请重新选择模板") from exc
 
-    task = GenerationTask(
-        id=str(uuid4()),
-        source_image_id=source.id,
-        template_id=template.id,
-        status="queued",
-        progress=0,
-        current_step=STEP_CREATED,
-        request_json=request.model_dump_json(),
-    )
-    db.add(task)
-    db.commit()
-    db.refresh(task)
+    task = _create_generation_task(db, request, template.id)
+    background_tasks.add_task(_run_generation_task, task.id)
+
+    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task.id).one()
+    return _task_to_out(task)
+
+
+@router.post("/tasks/{task_id}/retry", response_model=TaskOut)
+def retry_task(task_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TaskOut:
+    original_task = db.query(GenerationTask).filter(GenerationTask.id == task_id).first()
+    if original_task is None:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if original_task.status != "failed":
+        raise HTTPException(status_code=400, detail="只有失败任务可以重试")
+
+    try:
+        request = GenerateRequest.model_validate_json(original_task.request_json)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="原任务参数无法读取，请重新上传图片后生成") from exc
+
+    source = db.get(SourceImage, request.source_image_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="原图不存在，请重新上传商品图")
+    try:
+        template = get_template(request.template_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=400, detail="模板不存在，请重新选择模板") from exc
+
+    task = _create_generation_task(db, request, template.id)
     background_tasks.add_task(_run_generation_task, task.id)
 
     task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task.id).one()
