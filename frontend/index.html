@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ProductShot AI｜AI 商品主图工厂</title>
   <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .modal-overlay{position:fixed;inset:0;background:rgba(11,23,54,.46);z-index:80;display:grid;place-items:center;padding:24px;backdrop-filter:blur(8px)}
+    .modal-overlay[hidden]{display:none}
+    .modal-card{width:min(440px,100%);background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 80px rgba(11,23,54,.22);padding:24px}
+    .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+    .modal-head h3{margin:0;font-size:22px}.modal-head p{margin:6px 0 0;color:var(--muted);line-height:1.55;font-size:14px}
+    .modal-close{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#fff;color:#53627a;font-weight:950}
+    .size-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field-label{display:block;color:#273752;font-weight:900;margin-bottom:8px}
+    .size-input{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;color:var(--navy);font-weight:850;background:#fff}
+    .size-input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #eaf2ff}.modal-hint{margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.55}
+    .modal-error{min-height:20px;margin:10px 0 0;color:var(--orange);font-size:13px;font-weight:850}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -174,7 +186,7 @@
               <button type="button" data-width="1000" data-height="1000">1000 × 1000</button>
               <button class="active" type="button" data-width="1600" data-height="1600">1600 × 1600</button>
               <button type="button" data-width="2000" data-height="2000">2000 × 2000</button>
-              <button type="button" data-custom="true">自定义</button>
+              <button id="customSizeBtn" type="button" data-custom="true">自定义</button>
             </div>
             <label for="ratioRange">商品占比 <span id="ratioText">85%</span></label>
             <input id="ratioRange" class="range" type="range" min="45" max="92" value="85" />
@@ -214,6 +226,34 @@
       </section>
     </section>
   </main>
+
+  <div class="modal-overlay" id="customSizeModal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customSizeTitle">
+      <div class="modal-head">
+        <div>
+          <h3 id="customSizeTitle">自定义导出尺寸</h3>
+          <p>输入主图画布宽高，范围 512 到 4096 像素。</p>
+        </div>
+        <button class="modal-close" id="closeCustomSizeBtn" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="size-form-grid">
+        <div>
+          <span class="field-label">宽度 px</span>
+          <input class="size-input" id="customWidthInput" type="number" min="512" max="4096" step="1" inputmode="numeric" />
+        </div>
+        <div>
+          <span class="field-label">高度 px</span>
+          <input class="size-input" id="customHeightInput" type="number" min="512" max="4096" step="1" inputmode="numeric" />
+        </div>
+      </div>
+      <p class="modal-hint">建议常用：1000×1000、1600×1600、2000×2000。移动端商品流可用 1600×2000。</p>
+      <div class="modal-error" id="customSizeError"></div>
+      <div class="modal-actions">
+        <button class="ghost-btn" id="cancelCustomSizeBtn" type="button">取消</button>
+        <button class="primary-btn" id="applyCustomSizeBtn" type="button">使用这个尺寸</button>
+      </div>
+    </div>
+  </div>
 
   <div class="mobile-action"><button class="primary-btn" id="mobileGenerateBtn" type="button">✦ 生成主图</button></div>
   <script src="./app.js"></script>
