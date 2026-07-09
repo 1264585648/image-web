@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from PIL import Image, ImageChops, ImageFilter, ImageStat
+from PIL import Image, ImageChops, ImageColor, ImageFilter, ImageStat
 
 
 @dataclass
@@ -35,6 +35,17 @@ def _product_bbox_from_background(image: Image.Image, background_rgb=(255, 255, 
     return mask.getbbox()
 
 
+def _expected_background_rgb(background: str) -> tuple[int, int, int]:
+    if background == "light-gray":
+        return (248, 250, 252)
+    if background.startswith("#"):
+        try:
+            return ImageColor.getrgb(background)[:3]
+        except ValueError:
+            return (255, 255, 255)
+    return (255, 255, 255)
+
+
 def _background_whiteness(image: Image.Image, bbox: tuple[int, int, int, int] | None) -> float:
     rgb = image.convert("RGB")
     w, h = rgb.size
@@ -47,6 +58,8 @@ def _background_whiteness(image: Image.Image, bbox: tuple[int, int, int, int] | 
         x2 = min(w, x2 + pad)
         y2 = min(h, y2 + pad)
         mask.paste(0, (x1, y1, x2, y2))
+    if mask.getbbox() is None:
+        return 0.0
     stat = ImageStat.Stat(rgb, mask)
     mean = stat.mean
     return round(sum(mean) / 3, 2)
@@ -61,7 +74,10 @@ def _blur_score(image: Image.Image) -> float:
 
 def analyze_image(image: Image.Image, expected_background: str = "white") -> ComplianceResult:
     width, height = image.size
-    bbox = _product_bbox_from_alpha(image) or _product_bbox_from_background(image)
+    if expected_background == "transparent":
+        bbox = _product_bbox_from_alpha(image) or _product_bbox_from_background(image)
+    else:
+        bbox = _product_bbox_from_background(image, _expected_background_rgb(expected_background)) or _product_bbox_from_alpha(image)
 
     warnings: list[str] = []
     checks: dict[str, bool] = {}
