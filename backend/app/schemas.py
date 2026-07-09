@@ -37,6 +37,7 @@ class GenerateRequest(BaseModel):
     add_shadow: bool | None = None
     auto_enhance: bool = True
     edge_repair: bool = True
+    sharpen: bool = True
     output_format: str = Field(default="png", pattern="^(png|jpg|jpeg|webp)$")
 
 
