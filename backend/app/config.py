@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     auth_secret: str = "change-me-in-production-productshot-auth-secret"
     auth_token_expire_hours: int = 168
+    asset_url_expire_seconds: int = 3600
+    login_rate_limit_max_attempts: int = 5
+    login_rate_limit_window_seconds: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
