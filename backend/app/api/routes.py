@@ -266,6 +266,7 @@ def _run_generation_task(task_id: str) -> None:
             source.file_path,
             edge_repair=request.edge_repair,
             auto_enhance=request.auto_enhance,
+            sharpen=request.sharpen,
         )
         primary_score: float | None = None
         variants = _variant_requests(request, width, height)
