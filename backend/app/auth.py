@@ -10,7 +10,7 @@ import time
 from collections import defaultdict
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -115,6 +115,31 @@ def verify_access_token(token: str) -> dict[str, Any]:
     return payload
 
 
+def set_auth_cookie(response: Response, token: str) -> None:
+    settings = get_settings()
+    response.set_cookie(
+        key=settings.auth_cookie_name,
+        value=token,
+        max_age=settings.auth_token_expire_hours * 3600,
+        httponly=True,
+        secure=settings.environment != "local",
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    settings = get_settings()
+    response.delete_cookie(key=settings.auth_cookie_name, path="/", samesite="lax")
+
+
+def _token_from_request(credentials: HTTPAuthorizationCredentials | None, request: Request) -> str | None:
+    if credentials is not None and credentials.scheme.lower() == "bearer":
+        return credentials.credentials
+    settings = get_settings()
+    return request.cookies.get(settings.auth_cookie_name)
+
+
 def create_resource_signature(kind: str, resource_id: str, *, expires_in_seconds: int | None = None) -> tuple[int, str]:
     settings = get_settings()
     expires_in = expires_in_seconds or settings.asset_url_expire_seconds
@@ -156,13 +181,15 @@ def clear_login_attempts(email: str, client_ip: str) -> None:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    if credentials is None or credentials.scheme.lower() != "bearer":
+    token = _token_from_request(credentials, request)
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
 
-    payload = verify_access_token(credentials.credentials)
+    payload = verify_access_token(token)
     user = db.get(User, payload["sub"])
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已停用")
