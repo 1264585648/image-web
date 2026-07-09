@@ -12,10 +12,23 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from app.auth import create_access_token, get_current_user, hash_password, normalize_email, verify_password
 from app.config import get_settings
 from app.database import SessionLocal, get_db
-from app.models import GeneratedAsset, GenerationTask, SourceImage
-from app.schemas import AssetOut, ComplianceReport, GenerateRequest, HistoryOut, SourceImageOut, TaskOut, TemplateOut
+from app.models import GeneratedAsset, GenerationTask, SourceImage, User
+from app.schemas import (
+    AssetOut,
+    AuthLoginRequest,
+    AuthRegisterRequest,
+    AuthTokenOut,
+    ComplianceReport,
+    GenerateRequest,
+    HistoryOut,
+    SourceImageOut,
+    TaskOut,
+    TemplateOut,
+    UserOut,
+)
 from app.services.image_pipeline import compose_subject_image, prepare_subject
 from app.templates import TEMPLATES, get_template
 
@@ -101,6 +114,14 @@ def _friendly_generation_error(exc: Exception) -> str:
     return FRIENDLY_GENERATION_FALLBACK
 
 
+def _user_to_out(user: User) -> UserOut:
+    return UserOut.model_validate(user)
+
+
+def _auth_token_for_user(user: User) -> AuthTokenOut:
+    return AuthTokenOut(access_token=create_access_token(user.id), user=_user_to_out(user))
+
+
 def _asset_to_out(asset: GeneratedAsset) -> AssetOut:
     compliance = None
     if asset.compliance_json:
@@ -132,6 +153,15 @@ def _task_to_out(task: GenerationTask) -> TaskOut:
     )
 
 
+def _task_for_user(db: Session, task_id: str, user_id: str) -> GenerationTask | None:
+    return (
+        db.query(GenerationTask)
+        .options(selectinload(GenerationTask.assets))
+        .filter(GenerationTask.id == task_id, GenerationTask.user_id == user_id)
+        .first()
+    )
+
+
 def _set_task_progress(db: Session, task: GenerationTask, *, status: str | None = None, progress: int | None = None, current_step: str | None = None) -> None:
     if status is not None:
         task.status = status
@@ -143,9 +173,10 @@ def _set_task_progress(db: Session, task: GenerationTask, *, status: str | None 
     db.commit()
 
 
-def _create_generation_task(db: Session, request: GenerateRequest, template_id: str) -> GenerationTask:
+def _create_generation_task(db: Session, request: GenerateRequest, template_id: str, user_id: str) -> GenerationTask:
     task = GenerationTask(
         id=str(uuid4()),
+        user_id=user_id,
         source_image_id=request.source_image_id,
         template_id=template_id,
         status="queued",
@@ -331,8 +362,47 @@ def list_templates() -> list[TemplateOut]:
     return list(TEMPLATES.values())
 
 
+@router.post("/auth/register", response_model=AuthTokenOut)
+def register(payload: AuthRegisterRequest, db: Session = Depends(get_db)) -> AuthTokenOut:
+    email = normalize_email(payload.email)
+    exists = db.query(User).filter(User.email == email).first()
+    if exists is not None:
+        raise HTTPException(status_code=409, detail="该邮箱已注册，请直接登录")
+
+    user = User(
+        id=str(uuid4()),
+        email=email,
+        password_hash=hash_password(payload.password),
+        display_name=(payload.display_name or email.split("@", 1)[0]).strip()[:120],
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return _auth_token_for_user(user)
+
+
+@router.post("/auth/login", response_model=AuthTokenOut)
+def login(payload: AuthLoginRequest, db: Session = Depends(get_db)) -> AuthTokenOut:
+    email = normalize_email(payload.email)
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="账号已停用")
+    return _auth_token_for_user(user)
+
+
+@router.get("/auth/me", response_model=UserOut)
+def me(current_user: User = Depends(get_current_user)) -> UserOut:
+    return _user_to_out(current_user)
+
+
 @router.post("/upload", response_model=SourceImageOut)
-async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_db)) -> SourceImage:
+async def upload_image(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SourceImage:
     settings = get_settings()
     allowed_types = set(CONTENT_TYPE_EXTENSIONS)
     if file.content_type not in allowed_types:
@@ -363,6 +433,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
 
     source = SourceImage(
         id=image_id,
+        user_id=current_user.id,
         original_filename=Path(file.filename or f"{image_id}{suffix}").name,
         file_path=str(absolute_path),
         public_url=_storage_public_url(absolute_path),
@@ -377,8 +448,13 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
 
 
 @router.post("/generate", response_model=TaskOut)
-def generate_image(request: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TaskOut:
-    source = db.get(SourceImage, request.source_image_id)
+def generate_image(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskOut:
+    source = db.query(SourceImage).filter(SourceImage.id == request.source_image_id, SourceImage.user_id == current_user.id).first()
     if source is None:
         raise HTTPException(status_code=404, detail="原图不存在，请重新上传商品图")
     try:
@@ -386,7 +462,7 @@ def generate_image(request: GenerateRequest, background_tasks: BackgroundTasks, 
     except KeyError as exc:
         raise HTTPException(status_code=400, detail="模板不存在，请重新选择模板") from exc
 
-    task = _create_generation_task(db, request, template.id)
+    task = _create_generation_task(db, request, template.id, current_user.id)
     background_tasks.add_task(_run_generation_task, task.id)
 
     task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task.id).one()
@@ -394,8 +470,13 @@ def generate_image(request: GenerateRequest, background_tasks: BackgroundTasks, 
 
 
 @router.post("/tasks/{task_id}/retry", response_model=TaskOut)
-def retry_task(task_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TaskOut:
-    original_task = db.query(GenerationTask).filter(GenerationTask.id == task_id).first()
+def retry_task(
+    task_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskOut:
+    original_task = _task_for_user(db, task_id, current_user.id)
     if original_task is None:
         raise HTTPException(status_code=404, detail="任务不存在")
     if original_task.status != "failed":
@@ -406,7 +487,7 @@ def retry_task(task_id: str, background_tasks: BackgroundTasks, db: Session = De
     except Exception as exc:
         raise HTTPException(status_code=400, detail="原任务参数无法读取，请重新上传图片后生成") from exc
 
-    source = db.get(SourceImage, request.source_image_id)
+    source = db.query(SourceImage).filter(SourceImage.id == request.source_image_id, SourceImage.user_id == current_user.id).first()
     if source is None:
         raise HTTPException(status_code=404, detail="原图不存在，请重新上传商品图")
     try:
@@ -414,7 +495,7 @@ def retry_task(task_id: str, background_tasks: BackgroundTasks, db: Session = De
     except KeyError as exc:
         raise HTTPException(status_code=400, detail="模板不存在，请重新选择模板") from exc
 
-    task = _create_generation_task(db, request, template.id)
+    task = _create_generation_task(db, request, template.id, current_user.id)
     background_tasks.add_task(_run_generation_task, task.id)
 
     task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task.id).one()
@@ -422,16 +503,24 @@ def retry_task(task_id: str, background_tasks: BackgroundTasks, db: Session = De
 
 
 @router.get("/tasks/{task_id}", response_model=TaskOut)
-def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskOut:
-    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
+def get_task(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TaskOut:
+    task = _task_for_user(db, task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=404, detail="任务不存在")
     return _task_to_out(task)
 
 
 @router.get("/tasks/{task_id}/download.zip")
-def download_task_assets(task_id: str, db: Session = Depends(get_db)) -> StreamingResponse:
-    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
+def download_task_assets(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
+    task = _task_for_user(db, task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=404, detail="任务不存在")
     if not task.assets:
@@ -465,11 +554,16 @@ def download_task_assets(task_id: str, db: Session = Depends(get_db)) -> Streami
 
 
 @router.get("/history", response_model=HistoryOut)
-def history(limit: int = 30, db: Session = Depends(get_db)) -> HistoryOut:
+def history(
+    limit: int = 30,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> HistoryOut:
     limit = min(max(limit, 1), 100)
     tasks = (
         db.query(GenerationTask)
         .options(selectinload(GenerationTask.assets))
+        .filter(GenerationTask.user_id == current_user.id)
         .order_by(GenerationTask.created_at.desc())
         .limit(limit)
         .all()
@@ -478,8 +572,12 @@ def history(limit: int = 30, db: Session = Depends(get_db)) -> HistoryOut:
 
 
 @router.delete("/tasks/{task_id}")
-def delete_task(task_id: str, db: Session = Depends(get_db)) -> dict:
-    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
+def delete_task(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    task = _task_for_user(db, task_id, current_user.id)
     if task is None:
         raise HTTPException(status_code=404, detail="任务不存在")
     for asset in task.assets:
