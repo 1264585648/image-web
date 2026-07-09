@@ -143,7 +143,12 @@ def compose_subject_image(
     else:
         canvas.save(output_path, format="PNG", optimize=True)
 
-    report = analyze_image(canvas, expected_background=background)
+    report = analyze_image(
+        canvas,
+        expected_background=background,
+        rule_set_id=template.rule_set_id,
+        shadow_added=add_shadow,
+    )
     return output_path, report
 
 

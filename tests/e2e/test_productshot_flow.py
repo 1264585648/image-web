@@ -90,8 +90,12 @@ def test_frontend_shell_and_core_api_are_available() -> None:
 
     templates = _request("GET", "/api/templates")
     assert templates.status_code == 200
-    template_ids = {template["id"] for template in templates.json()}
+    template_payload = templates.json()
+    template_ids = {template["id"] for template in template_payload}
     assert {"amazon-white-main", "transparent-png", "soft-shadow-packshot"} <= template_ids
+    amazon_template = next(template for template in template_payload if template["id"] == "amazon-white-main")
+    assert amazon_template["rule_set_id"] == "amazon-main-image"
+    assert amazon_template["rule_summary"]
 
 
 def test_auth_required_register_login_and_duplicate_guard() -> None:
@@ -216,6 +220,13 @@ def test_upload_async_generate_download_history_retry_guard_and_user_isolation()
         assert final_task["progress"] == 100
         assert final_task["compliance_score"] is not None
         assert len(final_task["assets"]) >= 2
+        primary_asset = next(asset for asset in final_task["assets"] if asset["output_type"] == "transparent-png")
+        compliance = primary_asset["compliance"]
+        assert compliance["rule_set_id"] == "universal-transparent"
+        assert compliance["rule_set_name"]
+        assert compliance["items"]
+        assert compliance["qc_status"]["ocr_text"] == "not_run"
+        assert "product_detected" in compliance["checks"]
 
         for asset in final_task["assets"]:
             assert "/api/assets/" in asset["public_url"]

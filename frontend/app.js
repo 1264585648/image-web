@@ -44,12 +44,12 @@ const assetLabels = {
 const assetOrder = ['amazon-white-main', 'temu-white-main', 'shopify-main', 'mobile-cover-4x5', 'transparent-png', 'soft-shadow-packshot', 'hd-2000px'];
 
 const fallbackTemplates = [
-  { id: 'amazon-white-main', name: 'Amazon 白底主图', width: 2000, height: 2000, background: 'white', product_fill_ratio: 0.85, shadow_enabled: false },
-  { id: 'temu-white-main', name: 'Temu 跨境主图', width: 1600, height: 1600, background: 'white', product_fill_ratio: 0.82, shadow_enabled: false },
-  { id: 'shopify-main', name: 'Shopify 独立站主图', width: 1600, height: 1600, background: 'white', product_fill_ratio: 0.78, shadow_enabled: true },
-  { id: 'transparent-png', name: '透明 PNG', width: 2000, height: 2000, background: 'transparent', product_fill_ratio: 0.86, shadow_enabled: false },
-  { id: 'soft-shadow-packshot', name: '轻阴影棚拍图', width: 2000, height: 2000, background: 'white', product_fill_ratio: 0.78, shadow_enabled: true },
-  { id: 'mobile-cover-4x5', name: '批量 SKU 图', width: 1600, height: 2000, background: 'white', product_fill_ratio: 0.8, shadow_enabled: true },
+  { id: 'amazon-white-main', name: 'Amazon 白底主图', rule_set_id: 'amazon-main-image', rule_summary: '纯白背景、主体居中、不建议阴影和文字。', width: 2000, height: 2000, background: 'white', product_fill_ratio: 0.85, shadow_enabled: false },
+  { id: 'temu-white-main', name: 'Temu 跨境主图', rule_set_id: 'temu-main-image', rule_summary: '白底或接近白底、主体清晰居中。', width: 1600, height: 1600, background: 'white', product_fill_ratio: 0.82, shadow_enabled: false },
+  { id: 'shopify-main', name: 'Shopify 独立站主图', rule_set_id: 'shopify-product-image', rule_summary: '允许灵活背景和自然阴影。', width: 1600, height: 1600, background: 'white', product_fill_ratio: 0.78, shadow_enabled: true },
+  { id: 'transparent-png', name: '透明 PNG', rule_set_id: 'universal-transparent', rule_summary: '透明背景素材，不强制白底。', width: 2000, height: 2000, background: 'transparent', product_fill_ratio: 0.86, shadow_enabled: false },
+  { id: 'soft-shadow-packshot', name: '轻阴影棚拍图', rule_set_id: 'universal-packshot', rule_summary: '允许自然阴影，适合棚拍素材。', width: 2000, height: 2000, background: 'white', product_fill_ratio: 0.78, shadow_enabled: true },
+  { id: 'mobile-cover-4x5', name: '批量 SKU 图', rule_set_id: 'mobile-commerce-cover', rule_summary: '移动端商品流比例，主体需要清晰可见。', width: 1600, height: 2000, background: 'white', product_fill_ratio: 0.8, shadow_enabled: true },
 ];
 
 function $(selector) {
@@ -182,6 +182,7 @@ function renderLandingTemplates() {
     <article class="card template-card ${template.id === state.selectedTemplateId ? 'active' : ''}" data-template-card="${escapeHTML(template.id)}">
       <div class="template-thumb ${template.background === 'transparent' ? 'checker-bg' : ''}">${templateIllustrations[template.id] || '<div class="bottle"></div>'}</div>
       <h3>${getTemplateName(template)}</h3>
+      <p>${escapeHTML(template.rule_summary || template.description || '')}</p>
     </article>
   `).join('');
 }
@@ -641,6 +642,18 @@ function renderResults(assets) {
   $all('[data-report]').forEach(button => button.addEventListener('click', () => $('#complianceCard')?.scrollIntoView({ behavior: 'smooth' })));
 }
 
+function getComplianceItemClass(item) {
+  if (item?.status === 'pass' || item?.passed === true) return 'pass';
+  return 'warn';
+}
+
+function getComplianceItemText(item) {
+  const label = item?.label || item?.id || '检查项';
+  const message = item?.message ? `：${item.message}` : '';
+  if (item?.status === 'not_run') return `${label}：接口已预留，当前未运行`;
+  return `${label}${message}`;
+}
+
 function renderCompliance(compliance, fallbackScore) {
   const scoreText = $('#scoreText');
   const list = $('#complianceList');
@@ -656,17 +669,28 @@ function renderCompliance(compliance, fallbackScore) {
   const checks = compliance.checks || {};
   const metrics = compliance.metrics || {};
   const warnings = compliance.warnings || [];
+  const items = Array.isArray(compliance.items) ? compliance.items : [];
   const fillRatio = metrics.product_fill_ratio ?? metrics.fill_ratio;
-  const rows = [
-    { ok: checks.background_ok, text: '背景接近纯白' },
-    { ok: checks.centered, text: '商品居中' },
-    { ok: checks.fill_ratio_ok, text: `商品占比 ${formatRatio(fillRatio)}` },
-    { ok: checks.size_ok, text: '尺寸符合要求' },
-  ];
-  list.innerHTML = [
-    ...rows.map(row => `<li class="${row.ok ? 'pass' : 'warn'}">${escapeHTML(row.text)}</li>`),
-    ...warnings.map(warn => `<li class="warn">${escapeHTML(warn)}</li>`),
-  ].join('');
+  if (items.length) {
+    const visibleItems = items.filter(item => item.status !== 'not_run').slice(0, 6);
+    const recommendations = (compliance.recommendations || []).slice(0, 2);
+    list.innerHTML = [
+      `<li class="pass">${escapeHTML(compliance.rule_set_name || metrics.rule_set_name || '平台规则已应用')}</li>`,
+      ...visibleItems.map(item => `<li class="${getComplianceItemClass(item)}">${escapeHTML(getComplianceItemText(item))}</li>`),
+      ...recommendations.map(item => `<li class="warn">${escapeHTML(item)}</li>`),
+    ].join('');
+  } else {
+    const rows = [
+      { ok: checks.background_ok, text: '背景接近纯白' },
+      { ok: checks.centered, text: '商品居中' },
+      { ok: checks.fill_ratio_ok, text: `商品占比 ${formatRatio(fillRatio)}` },
+      { ok: checks.size_ok, text: '尺寸符合要求' },
+    ];
+    list.innerHTML = [
+      ...rows.map(row => `<li class="${row.ok ? 'pass' : 'warn'}">${escapeHTML(row.text)}</li>`),
+      ...warnings.map(warn => `<li class="warn">${escapeHTML(warn)}</li>`),
+    ].join('');
+  }
   if (typeof score === 'number' && score >= 85) {
     pill.textContent = '合规通过';
     pill.className = 'pass-pill success';
