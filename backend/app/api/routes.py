@@ -7,13 +7,13 @@ import zipfile
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.config import get_settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import GeneratedAsset, GenerationTask, SourceImage
 from app.schemas import AssetOut, ComplianceReport, GenerateRequest, HistoryOut, SourceImageOut, TaskOut, TemplateOut
 from app.services.image_pipeline import compose_subject_image, prepare_subject
@@ -203,6 +203,80 @@ def _variant_requests(request: GenerateRequest, width: int, height: int) -> list
     return deduped
 
 
+def _run_generation_task(task_id: str) -> None:
+    """Generate task assets outside the request/response lifecycle."""
+    settings = get_settings()
+    db = SessionLocal()
+    created_paths: list[Path] = []
+
+    try:
+        task = db.query(GenerationTask).filter(GenerationTask.id == task_id).first()
+        if task is None:
+            return
+        if task.status not in {"queued", "processing"}:
+            return
+
+        task.status = "processing"
+        task.error_message = None
+        db.add(task)
+        db.commit()
+
+        request = GenerateRequest.model_validate_json(task.request_json)
+        source = db.get(SourceImage, task.source_image_id)
+        if source is None:
+            raise FileNotFoundError("source image not found")
+        template = get_template(request.template_id)
+        width = request.width or template.width
+        height = request.height or template.height
+
+        subject = prepare_subject(
+            source.file_path,
+            edge_repair=request.edge_repair,
+            auto_enhance=request.auto_enhance,
+        )
+        primary_score: float | None = None
+
+        for output_type, variant_request in _variant_requests(request, width, height):
+            fmt = variant_request.output_format.lower().replace("jpeg", "jpg")
+            variant_width = variant_request.width or width
+            variant_height = variant_request.height or height
+            output_path = settings.storage_path / "outputs" / f"{task_id}-{output_type}-{variant_width}x{variant_height}.{fmt}"
+            created_paths.append(output_path)
+
+            saved_path, report = compose_subject_image(subject, variant_request, output_path)
+            asset = GeneratedAsset(
+                id=str(uuid4()),
+                task_id=task.id,
+                output_type=output_type,
+                file_path=str(saved_path),
+                public_url=_storage_public_url(saved_path),
+                width=variant_width,
+                height=variant_height,
+                compliance_json=json.dumps(report.to_dict(), ensure_ascii=False),
+            )
+            if primary_score is None:
+                primary_score = report.score
+            db.add(asset)
+
+        task.status = "success"
+        task.compliance_score = primary_score
+        task.error_message = None
+        db.add(task)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        for path in created_paths:
+            path.unlink(missing_ok=True)
+        failed_task = db.query(GenerationTask).filter(GenerationTask.id == task_id).first()
+        if failed_task is not None:
+            failed_task.status = "failed"
+            failed_task.error_message = _friendly_generation_error(exc)
+            db.add(failed_task)
+            db.commit()
+    finally:
+        db.close()
+
+
 @router.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "ProductShot AI Backend"}
@@ -259,8 +333,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
 
 
 @router.post("/generate", response_model=TaskOut)
-def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> TaskOut:
-    settings = get_settings()
+def generate_image(request: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> TaskOut:
     source = db.get(SourceImage, request.source_image_id)
     if source is None:
         raise HTTPException(status_code=404, detail="原图不存在，请重新上传商品图")
@@ -269,64 +342,19 @@ def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> T
     except KeyError as exc:
         raise HTTPException(status_code=400, detail="模板不存在，请重新选择模板") from exc
 
-    task_id = str(uuid4())
     task = GenerationTask(
-        id=task_id,
+        id=str(uuid4()),
         source_image_id=source.id,
         template_id=template.id,
-        status="processing",
+        status="queued",
         request_json=request.model_dump_json(),
     )
     db.add(task)
     db.commit()
+    db.refresh(task)
+    background_tasks.add_task(_run_generation_task, task.id)
 
-    width = request.width or template.width
-    height = request.height or template.height
-    created_paths: list[Path] = []
-
-    try:
-        subject = prepare_subject(
-            source.file_path,
-            edge_repair=request.edge_repair,
-            auto_enhance=request.auto_enhance,
-        )
-        primary_score: float | None = None
-        for output_type, variant_request in _variant_requests(request, width, height):
-            fmt = variant_request.output_format.lower().replace("jpeg", "jpg")
-            variant_width = variant_request.width or width
-            variant_height = variant_request.height or height
-            output_path = settings.storage_path / "outputs" / f"{task_id}-{output_type}-{variant_width}x{variant_height}.{fmt}"
-            created_paths.append(output_path)
-
-            saved_path, report = compose_subject_image(subject, variant_request, output_path)
-            asset = GeneratedAsset(
-                id=str(uuid4()),
-                task_id=task.id,
-                output_type=output_type,
-                file_path=str(saved_path),
-                public_url=_storage_public_url(saved_path),
-                width=variant_width,
-                height=variant_height,
-                compliance_json=json.dumps(report.to_dict(), ensure_ascii=False),
-            )
-            if primary_score is None:
-                primary_score = report.score
-            db.add(asset)
-
-        task.status = "success"
-        task.compliance_score = primary_score
-        task.error_message = None
-        db.add(task)
-        db.commit()
-    except Exception as exc:
-        for path in created_paths:
-            path.unlink(missing_ok=True)
-        task.status = "failed"
-        task.error_message = _friendly_generation_error(exc)
-        db.add(task)
-        db.commit()
-
-    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).one()
+    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task.id).one()
     return _task_to_out(task)
 
 
