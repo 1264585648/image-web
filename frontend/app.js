@@ -18,6 +18,26 @@ const templateIllustrations = {
   'mobile-cover-4x5': '<div class="mugs"><i></i><i></i><i></i><i></i></div>',
 };
 
+const assetLabels = {
+  'amazon-white-main': '白底主图',
+  'temu-white-main': 'Temu 主图',
+  'shopify-main': 'Shopify 主图',
+  'transparent-png': '透明 PNG',
+  'soft-shadow-packshot': '轻阴影图',
+  'mobile-cover-4x5': '移动端 4:5',
+  'hd-2000px': '2000px 高清图',
+};
+
+const assetOrder = [
+  'amazon-white-main',
+  'temu-white-main',
+  'shopify-main',
+  'mobile-cover-4x5',
+  'transparent-png',
+  'soft-shadow-packshot',
+  'hd-2000px',
+];
+
 const fallbackTemplates = [
   { id: 'amazon-white-main', name: 'Amazon 白底主图', width: 2000, height: 2000, background: 'white', product_fill_ratio: 0.85, shadow_enabled: false },
   { id: 'temu-white-main', name: 'Temu 跨境主图', width: 1600, height: 1600, background: 'white', product_fill_ratio: 0.82, shadow_enabled: false },
@@ -33,6 +53,15 @@ function $(selector) {
 
 function $all(selector) {
   return Array.from(document.querySelectorAll(selector));
+}
+
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 function toast(message, type = '') {
@@ -56,13 +85,17 @@ async function api(path, options = {}) {
   return response.json();
 }
 
+function getTemplateName(template) {
+  return escapeHTML(template?.name || assetLabels[template?.id] || template?.id || '模板');
+}
+
 function renderLandingTemplates() {
   const container = $('#landingTemplates');
   if (!container) return;
   container.innerHTML = state.templates.map(template => `
-    <article class="card template-card ${template.id === state.selectedTemplateId ? 'active' : ''}" data-template-card="${template.id}">
+    <article class="card template-card ${template.id === state.selectedTemplateId ? 'active' : ''}" data-template-card="${escapeHTML(template.id)}">
       <div class="template-thumb ${template.background === 'transparent' ? 'checker-bg' : ''}">${templateIllustrations[template.id] || '<div class="bottle"></div>'}</div>
-      <h3>${template.name}</h3>
+      <h3>${getTemplateName(template)}</h3>
     </article>
   `).join('');
 }
@@ -71,13 +104,11 @@ function renderTemplateOptions() {
   const container = $('#templateOptions');
   if (!container) return;
   container.innerHTML = state.templates.map(template => `
-    <button type="button" data-template="${template.id}" class="${template.id === state.selectedTemplateId ? 'active' : ''}">${template.name}</button>
+    <button type="button" data-template="${escapeHTML(template.id)}" class="${template.id === state.selectedTemplateId ? 'active' : ''}">${getTemplateName(template)}</button>
   `).join('');
 
   $all('[data-template]').forEach(button => {
-    button.addEventListener('click', () => {
-      selectTemplate(button.dataset.template);
-    });
+    button.addEventListener('click', () => selectTemplate(button.dataset.template));
   });
 
   $all('[data-template-card]').forEach(card => {
@@ -135,11 +166,10 @@ function setPreviewImage(url, status = '已生成') {
 
 function renderUploadedPreview(source) {
   const container = $('#uploadedPreview');
-  if (!container) return;
-  if (!source) return;
+  if (!container || !source) return;
   container.innerHTML = `
-    <img src="${source.public_url}" alt="上传的原始商品图" />
-    <p><b>${source.original_filename}</b><small>${source.width} × ${source.height} · ${source.content_type}</small></p>
+    <img src="${escapeHTML(source.public_url)}" alt="上传的原始商品图" />
+    <p><b>${escapeHTML(source.original_filename)}</b><small>${escapeHTML(source.width)} × ${escapeHTML(source.height)} · ${escapeHTML(source.content_type)}</small></p>
   `;
 }
 
@@ -199,7 +229,7 @@ async function generateImage() {
     state.lastTask = task;
     renderTask(task);
     if (task.status === 'success') {
-      toast('主图生成完成', 'success');
+      toast(`主图生成完成，共 ${task.assets?.length || 0} 个结果`, 'success');
     } else {
       const message = task.error_message || '生成失败，请换一张更清晰的商品图重试';
       $('#generatedBadge').className = 'generated-badge error';
@@ -218,13 +248,26 @@ async function generateImage() {
   }
 }
 
+function getPrimaryAsset(task) {
+  const assets = task?.assets || [];
+  return assets.find(asset => asset.output_type === state.selectedTemplateId) || assets[0];
+}
+
 function renderTask(task) {
-  const asset = task.assets?.[0];
+  const asset = getPrimaryAsset(task);
   if (asset?.public_url) {
     setPreviewImage(asset.public_url, '已生成');
   }
   renderResults(task.assets || []);
   renderCompliance(asset?.compliance, task.compliance_score);
+}
+
+function sortedAssets(assets) {
+  return [...assets].sort((a, b) => {
+    const ai = assetOrder.indexOf(a.output_type);
+    const bi = assetOrder.indexOf(b.output_type);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
 }
 
 function renderResults(assets) {
@@ -235,25 +278,22 @@ function renderResults(assets) {
     return;
   }
 
-  const labels = ['白底主图', '透明 PNG', '轻阴影图', '2000px 高清图'];
-  const first = assets[0];
-  const cards = labels.map((label, index) => ({
-    label,
-    asset: first,
-    suffix: index === 0 ? '推荐' : index === 3 ? '高清' : '',
-  }));
-
-  grid.innerHTML = cards.map(item => `
-    <article class="card result-card">
-      <b>${item.label} ${item.suffix ? `<span class="pass-pill success">${item.suffix}</span>` : ''}</b>
-      ${item.asset?.public_url ? `<img src="${item.asset.public_url}" alt="${item.label}" />` : '<div class="result-demo"><div class="bottle"></div></div>'}
-      <div class="result-actions">
-        ${item.asset?.public_url ? `<a href="${item.asset.public_url}" download>下载</a>` : '<button type="button">下载</button>'}
-        <button type="button" data-regenerate="true">重新生成</button>
-        <button type="button" data-report="true">查看合规报告</button>
-      </div>
-    </article>
-  `).join('');
+  grid.innerHTML = sortedAssets(assets).map(asset => {
+    const label = assetLabels[asset.output_type] || asset.output_type;
+    const badge = asset.output_type === state.selectedTemplateId ? '<span class="pass-pill success">当前模板</span>' : '';
+    return `
+      <article class="card result-card">
+        <b>${escapeHTML(label)} ${badge}</b>
+        <img src="${escapeHTML(asset.public_url)}" alt="${escapeHTML(label)}" />
+        <small>${escapeHTML(asset.width)} × ${escapeHTML(asset.height)}</small>
+        <div class="result-actions">
+          <a href="${escapeHTML(asset.public_url)}" download>下载</a>
+          <button type="button" data-regenerate="true">重新生成</button>
+          <button type="button" data-report="true">查看合规报告</button>
+        </div>
+      </article>
+    `;
+  }).join('');
 
   $all('[data-regenerate]').forEach(button => button.addEventListener('click', generateImage));
   $all('[data-report]').forEach(button => button.addEventListener('click', () => $('#complianceCard')?.scrollIntoView({ behavior: 'smooth' })));
@@ -276,19 +316,20 @@ function renderCompliance(compliance, fallbackScore) {
   const checks = compliance.checks || {};
   const metrics = compliance.metrics || {};
   const warnings = compliance.warnings || [];
+  const fillRatio = metrics.product_fill_ratio ?? metrics.fill_ratio;
   const rows = [
     { ok: checks.background_ok, text: '背景接近纯白' },
     { ok: checks.centered, text: '商品居中' },
-    { ok: checks.fill_ratio_ok, text: `商品占比 ${formatRatio(metrics.fill_ratio)}` },
+    { ok: checks.fill_ratio_ok, text: `商品占比 ${formatRatio(fillRatio)}` },
     { ok: checks.size_ok, text: '尺寸符合要求' },
   ];
 
   list.innerHTML = [
-    ...rows.map(row => `<li class="${row.ok ? 'pass' : 'warn'}">${row.text}</li>`),
-    ...warnings.map(warn => `<li class="warn">${warn}</li>`),
+    ...rows.map(row => `<li class="${row.ok ? 'pass' : 'warn'}">${escapeHTML(row.text)}</li>`),
+    ...warnings.map(warn => `<li class="warn">${escapeHTML(warn)}</li>`),
   ].join('');
 
-  if (score >= 85) {
+  if (typeof score === 'number' && score >= 85) {
     pill.textContent = '合规通过';
     pill.className = 'pass-pill success';
   } else {
@@ -298,7 +339,7 @@ function renderCompliance(compliance, fallbackScore) {
 }
 
 function formatRatio(value) {
-  if (typeof value !== 'number') return '86%';
+  if (typeof value !== 'number') return '—';
   if (value <= 1) return `${Math.round(value * 100)}%`;
   return `${Math.round(value)}%`;
 }
@@ -384,8 +425,8 @@ function bindEvents() {
       button.classList.add('active');
       if (button.dataset.tab === 'original' && state.sourceImage) {
         setPreviewImage(state.sourceImage.public_url, '原图');
-      } else if (button.dataset.tab === 'white' && state.lastTask?.assets?.[0]) {
-        setPreviewImage(state.lastTask.assets[0].public_url, '已生成');
+      } else if (button.dataset.tab === 'white' && state.lastTask?.assets?.length) {
+        setPreviewImage(getPrimaryAsset(state.lastTask).public_url, '已生成');
       } else if (button.dataset.tab === 'compliance') {
         $('#complianceCard')?.scrollIntoView({ behavior: 'smooth' });
       }
