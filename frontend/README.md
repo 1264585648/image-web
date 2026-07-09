@@ -6,8 +6,15 @@
 
 - `GET /api/templates`：加载主图模板
 - `POST /api/upload`：上传商品原图
-- `POST /api/generate`：生成主图
+- `POST /api/generate`：生成主图，并渲染返回的多个 `assets`
 - `GET /api/history?limit=1`：加载最近一次生成结果
+
+## 已优化交互
+
+- 生成结果不再用前端假卡片重复展示同一张图，而是按后端真实 `assets` 渲染。
+- 合规评分兼容后端 `metrics.product_fill_ratio` 字段，商品占比展示更准确。
+- 动态模板、文件名、告警内容做了 HTML 转义，降低页面注入风险。
+- 上传、生成、历史加载均保留错误提示和空状态。
 
 ## 推荐运行方式
 
