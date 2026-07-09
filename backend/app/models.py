@@ -27,6 +27,8 @@ class GenerationTask(Base):
     source_image_id: Mapped[str] = mapped_column(String(36), ForeignKey("source_images.id"))
     template_id: Mapped[str] = mapped_column(String(80))
     status: Mapped[str] = mapped_column(String(30), default="queued")
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    current_step: Mapped[str | None] = mapped_column(String(120), nullable=True)
     request_json: Mapped[str] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     compliance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
