@@ -1,3 +1,52 @@
+# ProductShot AI
+
+中文副标题：**AI 商品主图工厂**
+
+这是一个面向电商卖家、独立站卖家、Temu / Amazon / Shopify 商家的 AI 商品主图生成工具。
+
+当前仓库同时包含：
+
+- 后端 MVP：普通商品照片 → 平台合规白底主图
+- 高保真前端原型：桌面端首页、桌面端工作台、手机端首页、手机端工作台
+- 设计资产：统一视觉方向 SVG，可作为 PRD / 前端实现参考
+
+## 高保真前端原型
+
+已新增：
+
+- `index.html`：可直接打开的高保真静态原型
+- `assets/mockups/productshot-ai-ui-direction.svg`：四端界面方向资产
+- `assets/README.md`：设计资产说明
+
+本地预览：
+
+```bash
+python -m http.server 3000
+```
+
+打开：
+
+```text
+http://localhost:3000
+```
+
+页面包含：
+
+1. 桌面端首页 Landing Page
+2. 桌面端工作台 Dashboard
+3. 手机端首页 Mobile Landing
+4. 手机端工作台 Mobile Dashboard
+
+设计原则：
+
+- 高级、干净、专业、可信赖
+- 白色 / 浅灰 / 深蓝 / 科技蓝为主
+- 绿色表示合规通过，橙色表示警告
+- 圆角卡片、柔和阴影、强电商工具属性
+- 适合后续拆成 React / Vue / Next.js 组件
+
+---
+
 # ProductShot AI Backend
 
 AI 商品主图工厂后端 MVP。当前版本聚焦「普通商品照片 → 平台合规白底主图」，提供上传、模板、生成、合规检测、历史记录和静态文件访问。
