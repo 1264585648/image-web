@@ -17,6 +17,7 @@ const state = {
   customBackgroundActive: false,
   outputFormat: 'png',
   lastTask: null,
+  historyTasks: [],
   localPreviewUrl: null,
   customSizeActive: false,
 };
@@ -93,6 +94,11 @@ function getTemplateName(template) {
   return escapeHTML(template?.name || assetLabels[template?.id] || template?.id || '模板');
 }
 
+function getTemplateDisplayName(templateId) {
+  const template = state.templates.find(item => item.id === templateId);
+  return template?.name || assetLabels[templateId] || templateId || '未知模板';
+}
+
 function getFileExtension(file) {
   return String(file?.name || '').split('.').pop()?.toLowerCase() || '';
 }
@@ -102,6 +108,18 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDateTime(value) {
+  if (!value) return '未知时间';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '未知时间';
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function normalizeHexColor(value) {
@@ -497,6 +515,7 @@ async function generateImage() {
     });
     state.lastTask = task;
     renderTask(task);
+    await loadHistory({ keepCurrent: true });
     if (task.status === 'success') {
       toast(`主图生成完成，共 ${task.assets?.length || 0} 个结果`, 'success');
     } else {
@@ -523,12 +542,23 @@ function getPrimaryAsset(task) {
   return assets.find(asset => asset.output_type === state.selectedTemplateId) || assets[0];
 }
 
+function getHistoryThumbnailAsset(task) {
+  const assets = task?.assets || [];
+  return assets.find(asset => asset.output_type === task.template_id) || assets[0];
+}
+
 function renderTask(task) {
   const asset = getPrimaryAsset(task);
-  if (asset?.public_url) setPreviewImage(asset.public_url, '已生成');
+  if (asset?.public_url) {
+    setPreviewImage(asset.public_url, '已生成');
+  } else {
+    setPreviewImage(null, task?.status === 'failed' ? '生成失败' : '暂无结果');
+    if (task?.status === 'failed') $('#generatedBadge').className = 'generated-badge error';
+  }
   renderResults(task.assets || []);
   renderCompliance(asset?.compliance, task.compliance_score);
   updateDownloadAllButton(task);
+  highlightActiveHistory(task?.id);
 }
 
 function sortedAssets(assets) {
@@ -606,6 +636,70 @@ function formatRatio(value) {
   return `${Math.round(value)}%`;
 }
 
+function getStatusMeta(status) {
+  if (status === 'success') return { text: '成功', className: 'success' };
+  if (status === 'failed') return { text: '失败', className: 'failed' };
+  if (status === 'processing') return { text: '处理中', className: '' };
+  if (status === 'queued') return { text: '排队中', className: '' };
+  return { text: status || '未知', className: '' };
+}
+
+function renderHistoryList(tasks) {
+  const list = $('#historyList');
+  if (!list) return;
+  state.historyTasks = tasks || [];
+  if (!state.historyTasks.length) {
+    list.innerHTML = '<div class="history-empty">暂无历史记录</div>';
+    return;
+  }
+
+  list.innerHTML = state.historyTasks.map(task => {
+    const asset = getHistoryThumbnailAsset(task);
+    const status = getStatusMeta(task.status);
+    const score = typeof task.compliance_score === 'number' ? `${Math.round(task.compliance_score)}分` : '未评分';
+    const thumb = asset?.public_url
+      ? `<img src="${escapeHTML(asset.public_url)}" alt="历史结果缩略图" />`
+      : '<span>无图</span>';
+    const error = task.status === 'failed' && task.error_message
+      ? `<small class="history-error">${escapeHTML(task.error_message)}</small>`
+      : '';
+    return `
+      <button class="history-item ${task.id === state.lastTask?.id ? 'active' : ''}" type="button" data-history-task="${escapeHTML(task.id)}">
+        <span class="history-thumb">${thumb}</span>
+        <span class="history-main">
+          <b>${escapeHTML(getTemplateDisplayName(task.template_id))}</b>
+          <small>${escapeHTML(formatDateTime(task.created_at))} · ${escapeHTML(task.assets?.length || 0)} 张结果</small>
+          ${error}
+        </span>
+        <span class="history-meta"><span class="status-pill ${status.className}">${escapeHTML(status.text)}</span><span class="history-score">${escapeHTML(score)}</span></span>
+      </button>`;
+  }).join('');
+
+  $all('[data-history-task]').forEach(button => {
+    button.addEventListener('click', () => selectHistoryTask(button.dataset.historyTask));
+  });
+}
+
+function highlightActiveHistory(taskId) {
+  $all('[data-history-task]').forEach(button => {
+    button.classList.toggle('active', Boolean(taskId) && button.dataset.historyTask === taskId);
+  });
+}
+
+function selectHistoryTask(taskId) {
+  const task = state.historyTasks.find(item => item.id === taskId);
+  if (!task) {
+    toast('没有找到这条历史记录，请刷新列表。', 'error');
+    return;
+  }
+  state.lastTask = task;
+  renderTask(task);
+  $('#resultGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (task.status === 'failed') {
+    toast(task.error_message || '这条历史任务生成失败。', 'error');
+  }
+}
+
 async function loadTemplates() {
   try {
     state.templates = await api('/api/templates');
@@ -618,11 +712,22 @@ async function loadTemplates() {
   selectTemplate(state.selectedTemplateId);
 }
 
-async function loadHistory() {
+async function loadHistory(options = {}) {
   try {
-    const history = await api('/api/history?limit=1');
-    const last = history.tasks?.[0];
-    if (last?.assets?.length) {
+    const history = await api('/api/history?limit=30');
+    const tasks = history.tasks || [];
+    renderHistoryList(tasks);
+
+    if (options.keepCurrent && state.lastTask?.id) {
+      const refreshedCurrent = tasks.find(task => task.id === state.lastTask.id);
+      if (refreshedCurrent) state.lastTask = refreshedCurrent;
+      highlightActiveHistory(state.lastTask.id);
+      updateDownloadAllButton(state.lastTask);
+      return;
+    }
+
+    const last = tasks.find(task => task.assets?.length) || tasks[0];
+    if (last) {
       state.lastTask = last;
       renderTask(last);
     } else {
@@ -631,7 +736,9 @@ async function loadHistory() {
       updateDownloadAllButton(null);
     }
   } catch (_) {
+    state.historyTasks = [];
     state.lastTask = null;
+    renderHistoryList([]);
     renderResults([]);
     updateDownloadAllButton(null);
   }
@@ -708,7 +815,8 @@ function bindEvents() {
 
   $('#generateBtn')?.addEventListener('click', generateImage);
   $('#mobileGenerateBtn')?.addEventListener('click', generateImage);
-  $('#refreshHistoryBtn')?.addEventListener('click', loadHistory);
+  $('#refreshHistoryBtn')?.addEventListener('click', () => loadHistory({ keepCurrent: true }));
+  $('#refreshHistoryListBtn')?.addEventListener('click', () => loadHistory({ keepCurrent: true }));
   $('#downloadAllBtn')?.addEventListener('click', handleDownloadAll);
 
   $all('#previewTabs button').forEach(button => {
