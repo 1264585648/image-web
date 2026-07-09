@@ -11,15 +11,46 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import GeneratedAsset, GenerationTask, SourceImage
 from app.schemas import AssetOut, ComplianceReport, GenerateRequest, HistoryOut, SourceImageOut, TaskOut, TemplateOut
-from app.services.image_pipeline import compose_main_image
+from app.services.image_pipeline import compose_subject_image, prepare_subject
 from app.templates import TEMPLATES, get_template
 
 router = APIRouter(prefix="/api")
 
+CONTENT_TYPE_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
-def _public_url(path: Path) -> str:
+
+class OutputVariant(tuple):
+    __slots__ = ()
+
+    @property
+    def output_type(self) -> str:
+        return self[0]
+
+    @property
+    def request(self) -> GenerateRequest:
+        return self[1]
+
+
+def _safe_extension(file: UploadFile) -> str:
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
+        return ".jpg" if suffix == ".jpeg" else suffix
+    return CONTENT_TYPE_EXTENSIONS.get(file.content_type or "", ".png")
+
+
+def _storage_public_url(path: Path) -> str:
     settings = get_settings()
-    return f"{settings.public_base_url}/{path.as_posix()}"
+    storage_root = settings.storage_path.resolve()
+    resolved_path = path.resolve()
+    try:
+        relative = resolved_path.relative_to(storage_root)
+    except ValueError:
+        relative = Path(path.name)
+    return f"{settings.public_base_url.rstrip('/')}/storage/{relative.as_posix()}"
 
 
 def _asset_to_out(asset: GeneratedAsset) -> AssetOut:
@@ -51,6 +82,84 @@ def _task_to_out(task: GenerationTask) -> TaskOut:
     )
 
 
+def _variant_requests(request: GenerateRequest, width: int, height: int) -> list[tuple[str, GenerateRequest]]:
+    """Return the product outputs shown in the UI while avoiding duplicate renders."""
+    base_background = request.background or get_template(request.template_id).background
+    base_shadow = get_template(request.template_id).shadow_enabled if request.add_shadow is None else request.add_shadow
+    base_format = request.output_format.lower().replace("jpeg", "jpg")
+
+    variants: list[tuple[str, GenerateRequest]] = [
+        (
+            request.template_id,
+            request.model_copy(
+                update={
+                    "width": width,
+                    "height": height,
+                    "background": base_background,
+                    "add_shadow": base_shadow,
+                    "output_format": base_format,
+                }
+            ),
+        ),
+        (
+            "transparent-png",
+            request.model_copy(
+                update={
+                    "template_id": "transparent-png",
+                    "width": width,
+                    "height": height,
+                    "background": "transparent",
+                    "add_shadow": False,
+                    "output_format": "png",
+                }
+            ),
+        ),
+        (
+            "soft-shadow-packshot",
+            request.model_copy(
+                update={
+                    "template_id": "soft-shadow-packshot",
+                    "width": width,
+                    "height": height,
+                    "background": "white",
+                    "add_shadow": True,
+                    "output_format": "png",
+                }
+            ),
+        ),
+        (
+            "hd-2000px",
+            request.model_copy(
+                update={
+                    "width": max(width, 2000),
+                    "height": max(height, 2000),
+                    "background": "transparent" if base_background == "transparent" else "white",
+                    "add_shadow": base_shadow and base_background != "transparent",
+                    "output_format": "png",
+                }
+            ),
+        ),
+    ]
+
+    deduped: list[tuple[str, GenerateRequest]] = []
+    seen: set[tuple] = set()
+    for output_type, variant in variants:
+        key = (
+            variant.template_id,
+            variant.width,
+            variant.height,
+            variant.product_fill_ratio,
+            variant.background,
+            variant.add_shadow,
+            variant.output_format,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append((output_type, variant))
+    return deduped
+
+
 @router.get("/health")
 def health() -> dict:
     return {"ok": True, "service": "ProductShot AI Backend"}
@@ -64,14 +173,13 @@ def list_templates() -> list[TemplateOut]:
 @router.post("/upload", response_model=SourceImageOut)
 async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_db)) -> SourceImage:
     settings = get_settings()
-    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    allowed_types = set(CONTENT_TYPE_EXTENSIONS)
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail="Only JPG, PNG and WebP images are supported")
 
-    suffix = Path(file.filename or "image.png").suffix.lower() or ".png"
+    suffix = _safe_extension(file)
     image_id = str(uuid4())
-    relative_path = Path("storage/uploads") / f"{image_id}{suffix}"
-    absolute_path = Path(relative_path)
+    absolute_path = settings.storage_path / "uploads" / f"{image_id}{suffix}"
     absolute_path.parent.mkdir(parents=True, exist_ok=True)
 
     max_bytes = settings.max_upload_mb * 1024 * 1024
@@ -94,9 +202,9 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
 
     source = SourceImage(
         id=image_id,
-        original_filename=file.filename or f"{image_id}{suffix}",
-        file_path=str(relative_path),
-        public_url=_public_url(relative_path),
+        original_filename=Path(file.filename or f"{image_id}{suffix}").name,
+        file_path=str(absolute_path),
+        public_url=_storage_public_url(absolute_path),
         width=width,
         height=height,
         content_type=file.content_type or "application/octet-stream",
@@ -128,29 +236,46 @@ def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> T
     db.add(task)
     db.commit()
 
-    fmt = request.output_format.lower().replace("jpeg", "jpg")
     width = request.width or template.width
     height = request.height or template.height
-    relative_output = Path("storage/outputs") / f"{task_id}-{template.id}-{width}x{height}.{fmt}"
+    created_paths: list[Path] = []
 
     try:
-        output_path, report = compose_main_image(source.file_path, request, relative_output)
-        asset = GeneratedAsset(
-            id=str(uuid4()),
-            task_id=task.id,
-            output_type=template.id,
-            file_path=str(output_path),
-            public_url=_public_url(output_path),
-            width=width,
-            height=height,
-            compliance_json=json.dumps(report.to_dict(), ensure_ascii=False),
+        subject = prepare_subject(
+            source.file_path,
+            edge_repair=request.edge_repair,
+            auto_enhance=request.auto_enhance,
         )
+        primary_score: float | None = None
+        for output_type, variant_request in _variant_requests(request, width, height):
+            fmt = variant_request.output_format.lower().replace("jpeg", "jpg")
+            variant_width = variant_request.width or width
+            variant_height = variant_request.height or height
+            output_path = settings.storage_path / "outputs" / f"{task_id}-{output_type}-{variant_width}x{variant_height}.{fmt}"
+            created_paths.append(output_path)
+
+            saved_path, report = compose_subject_image(subject, variant_request, output_path)
+            asset = GeneratedAsset(
+                id=str(uuid4()),
+                task_id=task.id,
+                output_type=output_type,
+                file_path=str(saved_path),
+                public_url=_storage_public_url(saved_path),
+                width=variant_width,
+                height=variant_height,
+                compliance_json=json.dumps(report.to_dict(), ensure_ascii=False),
+            )
+            if primary_score is None:
+                primary_score = report.score
+            db.add(asset)
+
         task.status = "success"
-        task.compliance_score = report.score
-        db.add(asset)
+        task.compliance_score = primary_score
         db.add(task)
         db.commit()
     except Exception as exc:
+        for path in created_paths:
+            path.unlink(missing_ok=True)
         task.status = "failed"
         task.error_message = str(exc)
         db.add(task)
