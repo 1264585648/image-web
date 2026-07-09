@@ -321,6 +321,52 @@ function handleDownloadAll() {
   window.location.href = `${API_BASE}/api/tasks/${encodeURIComponent(task.id)}/download.zip`;
 }
 
+function clearCurrentTaskView(message = '待生成') {
+  state.lastTask = null;
+  renderResults([]);
+  renderCompliance(null, null);
+  updateDownloadAllButton(null);
+  highlightActiveHistory(null);
+  if (state.sourceImage?.public_url) {
+    setPreviewImage(state.sourceImage.public_url, '已上传');
+  } else {
+    setPreviewImage(null, message);
+  }
+}
+
+async function deleteHistoryTask(taskId, event) {
+  event?.stopPropagation();
+  const task = state.historyTasks.find(item => item.id === taskId);
+  if (!task) {
+    toast('没有找到这条历史记录，请刷新列表。', 'error');
+    return;
+  }
+  const templateName = getTemplateDisplayName(task.template_id);
+  const ok = window.confirm(`确定删除这条历史记录吗？\n\n${templateName}\n${formatDateTime(task.created_at)}\n\n删除后会同时清理对应生成图片。`);
+  if (!ok) return;
+
+  try {
+    await api(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
+    toast('历史记录已删除', 'success');
+    state.historyTasks = state.historyTasks.filter(item => item.id !== taskId);
+    const deletedCurrent = state.lastTask?.id === taskId;
+    if (deletedCurrent) {
+      const nextTask = state.historyTasks.find(item => item.assets?.length) || state.historyTasks[0];
+      if (nextTask) {
+        state.lastTask = nextTask;
+        renderTask(nextTask);
+      } else {
+        clearCurrentTaskView('待生成');
+      }
+    }
+    renderHistoryList(state.historyTasks);
+    if (state.lastTask?.id) highlightActiveHistory(state.lastTask.id);
+    await loadHistory({ keepCurrent: Boolean(state.lastTask?.id) });
+  } catch (error) {
+    toast(`删除失败：${error.message}`, 'error');
+  }
+}
+
 function selectTemplate(templateId) {
   state.selectedTemplateId = templateId;
   const template = state.templates.find(item => item.id === templateId);
@@ -664,25 +710,38 @@ function renderHistoryList(tasks) {
       ? `<small class="history-error">${escapeHTML(task.error_message)}</small>`
       : '';
     return `
-      <button class="history-item ${task.id === state.lastTask?.id ? 'active' : ''}" type="button" data-history-task="${escapeHTML(task.id)}">
+      <div class="history-item ${task.id === state.lastTask?.id ? 'active' : ''}" role="button" tabindex="0" data-history-task="${escapeHTML(task.id)}">
         <span class="history-thumb">${thumb}</span>
         <span class="history-main">
           <b>${escapeHTML(getTemplateDisplayName(task.template_id))}</b>
           <small>${escapeHTML(formatDateTime(task.created_at))} · ${escapeHTML(task.assets?.length || 0)} 张结果</small>
           ${error}
         </span>
-        <span class="history-meta"><span class="status-pill ${status.className}">${escapeHTML(status.text)}</span><span class="history-score">${escapeHTML(score)}</span></span>
-      </button>`;
+        <span class="history-meta">
+          <span class="status-pill ${status.className}">${escapeHTML(status.text)}</span>
+          <span class="history-score">${escapeHTML(score)}</span>
+          <button class="ghost-btn" type="button" data-delete-task="${escapeHTML(task.id)}" style="height:30px;padding:0 10px;border-radius:9px;color:#f97316">删除</button>
+        </span>
+      </div>`;
   }).join('');
 
-  $all('[data-history-task]').forEach(button => {
-    button.addEventListener('click', () => selectHistoryTask(button.dataset.historyTask));
+  $all('[data-history-task]').forEach(item => {
+    item.addEventListener('click', () => selectHistoryTask(item.dataset.historyTask));
+    item.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectHistoryTask(item.dataset.historyTask);
+      }
+    });
+  });
+  $all('[data-delete-task]').forEach(button => {
+    button.addEventListener('click', event => deleteHistoryTask(button.dataset.deleteTask, event));
   });
 }
 
 function highlightActiveHistory(taskId) {
-  $all('[data-history-task]').forEach(button => {
-    button.classList.toggle('active', Boolean(taskId) && button.dataset.historyTask === taskId);
+  $all('[data-history-task]').forEach(item => {
+    item.classList.toggle('active', Boolean(taskId) && item.dataset.historyTask === taskId);
   });
 }
 
@@ -720,9 +779,19 @@ async function loadHistory(options = {}) {
 
     if (options.keepCurrent && state.lastTask?.id) {
       const refreshedCurrent = tasks.find(task => task.id === state.lastTask.id);
-      if (refreshedCurrent) state.lastTask = refreshedCurrent;
-      highlightActiveHistory(state.lastTask.id);
-      updateDownloadAllButton(state.lastTask);
+      if (refreshedCurrent) {
+        state.lastTask = refreshedCurrent;
+        highlightActiveHistory(state.lastTask.id);
+        updateDownloadAllButton(state.lastTask);
+        return;
+      }
+      const fallbackTask = tasks.find(task => task.assets?.length) || tasks[0];
+      if (fallbackTask) {
+        state.lastTask = fallbackTask;
+        renderTask(fallbackTask);
+      } else {
+        clearCurrentTaskView('待生成');
+      }
       return;
     }
 
@@ -731,16 +800,12 @@ async function loadHistory(options = {}) {
       state.lastTask = last;
       renderTask(last);
     } else {
-      state.lastTask = null;
-      renderResults([]);
-      updateDownloadAllButton(null);
+      clearCurrentTaskView('待生成');
     }
   } catch (_) {
     state.historyTasks = [];
-    state.lastTask = null;
     renderHistoryList([]);
-    renderResults([]);
-    updateDownloadAllButton(null);
+    clearCurrentTaskView('待生成');
   }
 }
 
