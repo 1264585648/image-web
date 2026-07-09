@@ -11,15 +11,15 @@
 
 ## 推荐运行方式
 
-在仓库根目录启动后端：
+在仓库根目录执行：
 
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cd ..
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 然后访问：
@@ -27,6 +27,8 @@ uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```text
 http://localhost:8000/
 ```
+
+> 说明：虽然命令在 `backend/` 目录里执行，后端会自动向上查找仓库根目录下的 `frontend/`，并把它挂载到 `/`。
 
 也可以继续使用 Docker：
 
