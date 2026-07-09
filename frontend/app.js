@@ -3,6 +3,8 @@ const MAX_UPLOAD_MB = 20;
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_UPLOAD_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
+const MIN_OUTPUT_SIZE = 512;
+const MAX_OUTPUT_SIZE = 4096;
 
 const state = {
   templates: [],
@@ -12,6 +14,7 @@ const state = {
   background: 'white',
   lastTask: null,
   localPreviewUrl: null,
+  customSizeActive: false,
 };
 
 const templateIllustrations = {
@@ -196,11 +199,37 @@ function renderTemplateOptions() {
   });
 }
 
+function findSelectedPresetButton() {
+  return $all('#sizeOptions button:not([data-custom])').find(button => {
+    return Number(button.dataset.width) === state.selectedSize.width && Number(button.dataset.height) === state.selectedSize.height;
+  });
+}
+
+function updateCustomSizeButton() {
+  const customButton = $('#customSizeBtn');
+  if (!customButton) return;
+  const presetButton = findSelectedPresetButton();
+  customButton.textContent = state.customSizeActive || !presetButton
+    ? `${state.selectedSize.width} × ${state.selectedSize.height}`
+    : '自定义';
+}
+
+function setSelectedSize(width, height, options = {}) {
+  state.selectedSize = { width, height };
+  const presetMatch = $all('#sizeOptions button:not([data-custom])').some(button => {
+    return Number(button.dataset.width) === width && Number(button.dataset.height) === height;
+  });
+  state.customSizeActive = Boolean(options.custom) || !presetMatch;
+  updateCustomSizeButton();
+  syncActiveButtons();
+}
+
 function selectTemplate(templateId) {
   state.selectedTemplateId = templateId;
   const template = state.templates.find(item => item.id === templateId);
   if (template) {
     state.selectedSize = { width: template.width, height: template.height };
+    state.customSizeActive = false;
     state.background = template.background || 'white';
     $('#ratioRange').value = Math.round((template.product_fill_ratio || 0.85) * 100);
     $('#ratioText').textContent = `${$('#ratioRange').value}%`;
@@ -208,14 +237,20 @@ function selectTemplate(templateId) {
   }
   renderLandingTemplates();
   renderTemplateOptions();
+  updateCustomSizeButton();
   syncActiveButtons();
 }
 
 function syncActiveButtons() {
+  const presetButton = findSelectedPresetButton();
   $all('#sizeOptions button').forEach(button => {
+    if (button.dataset.custom) {
+      button.classList.toggle('active', state.customSizeActive || !presetButton);
+      return;
+    }
     const width = Number(button.dataset.width);
     const height = Number(button.dataset.height);
-    button.classList.toggle('active', width === state.selectedSize.width && height === state.selectedSize.height);
+    button.classList.toggle('active', !state.customSizeActive && width === state.selectedSize.width && height === state.selectedSize.height);
   });
   $all('#backgroundOptions button').forEach(button => {
     button.classList.toggle('active', button.dataset.bg === state.background);
@@ -252,6 +287,57 @@ function renderUploadedPreview(source) {
     <img src="${escapeHTML(source.public_url)}" alt="上传的原始商品图" />
     <p><b>${escapeHTML(source.original_filename)}</b><small>${escapeHTML(detailText)}</small></p>
   `;
+}
+
+function openCustomSizeModal() {
+  const modal = $('#customSizeModal');
+  const widthInput = $('#customWidthInput');
+  const heightInput = $('#customHeightInput');
+  const error = $('#customSizeError');
+  if (!modal || !widthInput || !heightInput) return;
+  widthInput.value = state.selectedSize.width;
+  heightInput.value = state.selectedSize.height;
+  if (error) error.textContent = '';
+  modal.hidden = false;
+  setTimeout(() => widthInput.focus(), 0);
+}
+
+function closeCustomSizeModal() {
+  const modal = $('#customSizeModal');
+  const error = $('#customSizeError');
+  if (error) error.textContent = '';
+  if (modal) modal.hidden = true;
+}
+
+function parseOutputSize(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number)) {
+    return { ok: false, message: `${label}必须是整数。` };
+  }
+  if (number < MIN_OUTPUT_SIZE || number > MAX_OUTPUT_SIZE) {
+    return { ok: false, message: `${label}必须在 ${MIN_OUTPUT_SIZE} 到 ${MAX_OUTPUT_SIZE} 像素之间。` };
+  }
+  return { ok: true, value: number };
+}
+
+function applyCustomSize() {
+  const widthInput = $('#customWidthInput');
+  const heightInput = $('#customHeightInput');
+  const error = $('#customSizeError');
+  if (!widthInput || !heightInput) return;
+
+  const width = parseOutputSize(widthInput.value, '宽度');
+  const height = parseOutputSize(heightInput.value, '高度');
+  const message = !width.ok ? width.message : (!height.ok ? height.message : '');
+  if (message) {
+    if (error) error.textContent = message;
+    toast(message, 'error');
+    return;
+  }
+
+  setSelectedSize(width.value, height.value, { custom: true });
+  closeCustomSizeModal();
+  toast(`已使用自定义尺寸 ${width.value} × ${height.value}`, 'success');
 }
 
 async function handleUpload(file) {
@@ -508,12 +594,27 @@ function bindEvents() {
   $all('#sizeOptions button').forEach(button => {
     button.addEventListener('click', () => {
       if (button.dataset.custom) {
-        toast('自定义尺寸入口已预留，可在下一版接入弹窗', 'error');
+        openCustomSizeModal();
         return;
       }
-      state.selectedSize = { width: Number(button.dataset.width), height: Number(button.dataset.height) };
-      syncActiveButtons();
+      setSelectedSize(Number(button.dataset.width), Number(button.dataset.height), { custom: false });
     });
+  });
+
+  $('#applyCustomSizeBtn')?.addEventListener('click', applyCustomSize);
+  $('#cancelCustomSizeBtn')?.addEventListener('click', closeCustomSizeModal);
+  $('#closeCustomSizeBtn')?.addEventListener('click', closeCustomSizeModal);
+  $('#customSizeModal')?.addEventListener('click', event => {
+    if (event.target.id === 'customSizeModal') closeCustomSizeModal();
+  });
+  $('#customWidthInput')?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') applyCustomSize();
+  });
+  $('#customHeightInput')?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') applyCustomSize();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !$('#customSizeModal')?.hidden) closeCustomSizeModal();
   });
 
   $all('#backgroundOptions button').forEach(button => {
