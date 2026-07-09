@@ -7,255 +7,55 @@
   <link rel="stylesheet" href="./styles.css" />
   <style>
     .modal-overlay{position:fixed;inset:0;background:rgba(11,23,54,.46);z-index:80;display:grid;place-items:center;padding:24px;backdrop-filter:blur(8px)}
-    .modal-overlay[hidden]{display:none}
-    .modal-card{width:min(440px,100%);background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 80px rgba(11,23,54,.22);padding:24px}
-    .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
-    .modal-head h3{margin:0;font-size:22px}.modal-head p{margin:6px 0 0;color:var(--muted);line-height:1.55;font-size:14px}
-    .modal-close{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#fff;color:#53627a;font-weight:950}
-    .size-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field-label{display:block;color:#273752;font-weight:900;margin-bottom:8px}
-    .size-input{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;color:var(--navy);font-weight:850;background:#fff}
-    .size-input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #eaf2ff}.modal-hint{margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.55}
-    .modal-error{min-height:20px;margin:10px 0 0;color:var(--orange);font-size:13px;font-weight:850}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+    .modal-overlay[hidden]{display:none}.modal-card{width:min(440px,100%);background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 80px rgba(11,23,54,.22);padding:24px}
+    .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.modal-head h3{margin:0;font-size:22px}.modal-head p{margin:6px 0 0;color:var(--muted);line-height:1.55;font-size:14px}
+    .modal-close{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:#fff;color:#53627a;font-weight:950}.size-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .field-label{display:block;color:#273752;font-weight:900;margin-bottom:8px}.size-input{width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px;color:var(--navy);font-weight:850;background:#fff}
+    .size-input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #eaf2ff}.modal-hint{margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.55}.modal-error{min-height:20px;margin:10px 0 0;color:var(--orange);font-size:13px;font-weight:850}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+    .custom-color-row{margin-top:10px;border:1px solid var(--line);border-radius:14px;background:#f8fbff;padding:12px;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:12px}.custom-color-row[hidden]{display:none}.custom-color-row input[type="color"]{width:44px;height:38px;border:0;background:transparent;padding:0}.custom-color-row b{display:block;color:#273752;font-size:13px}.custom-color-row small{display:block;color:var(--muted);margin-top:3px}.color-value{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:var(--blue);font-weight:950}
   </style>
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#landing" aria-label="ProductShot AI 首页">
-      <span class="brand-mark">P</span>
-      <span>
-        <strong>ProductShot AI</strong>
-        <small>AI 商品主图工厂</small>
-      </span>
-    </a>
-    <nav class="desktop-nav">
-      <a href="#features">功能</a>
-      <a href="#templates">模板</a>
-      <a href="#pricing">定价</a>
-      <a href="#cases">案例</a>
-      <button class="ghost-btn" type="button" data-scroll="dashboard">登录</button>
-      <button class="primary-btn" type="button" data-scroll="dashboard">免费生成主图</button>
-    </nav>
+    <a class="brand" href="#landing" aria-label="ProductShot AI 首页"><span class="brand-mark">P</span><span><strong>ProductShot AI</strong><small>AI 商品主图工厂</small></span></a>
+    <nav class="desktop-nav"><a href="#features">功能</a><a href="#templates">模板</a><a href="#pricing">定价</a><a href="#cases">案例</a><button class="ghost-btn" type="button" data-scroll="dashboard">登录</button><button class="primary-btn" type="button" data-scroll="dashboard">免费生成主图</button></nav>
     <button class="menu-btn" type="button" data-scroll="dashboard" aria-label="打开工作台">☰</button>
   </header>
 
   <main>
     <section id="landing" class="hero section-shell">
-      <div class="hero-copy">
-        <p class="eyebrow">AI 商品主图生成</p>
-        <h1>上传商品图，<br />一键生成平台合规主图</h1>
-        <p class="lead">自动抠图、白底化、居中排版、轻阴影和多尺寸导出，帮电商卖家快速生成可上架的商品主图。</p>
-        <div class="hero-actions">
-          <button class="primary-btn large" type="button" data-scroll="dashboard">立即免费生成</button>
-          <a class="secondary-btn large" href="#cases">查看生成案例</a>
-        </div>
-        <div class="platforms">
-          <span>适用于 Amazon / Temu / Shopify</span>
-          <strong>amazon</strong><strong class="temu">TEMU</strong><strong class="shopify">Shopify</strong>
-        </div>
-      </div>
-      <div class="process-card card">
-        <div class="process-grid">
-          <div class="process-step">
-            <b>原图</b>
-            <div class="product-stage messy-bg"><div class="earbuds"></div></div>
-          </div>
-          <div class="process-step">
-            <b>自动抠图</b>
-            <div class="product-stage checker-bg"><div class="earbuds"></div></div>
-          </div>
-          <div class="process-step">
-            <b>白底主图</b>
-            <div class="product-stage"><div class="earbuds"></div></div>
-          </div>
-          <div class="process-step passed">
-            <b>合规检测通过</b>
-            <div class="product-stage pass-border"><div class="earbuds"></div><span class="pass-badge">✓ 检测通过</span></div>
-          </div>
-        </div>
-      </div>
+      <div class="hero-copy"><p class="eyebrow">AI 商品主图生成</p><h1>上传商品图，<br />一键生成平台合规主图</h1><p class="lead">自动抠图、白底化、居中排版、轻阴影和多尺寸导出，帮电商卖家快速生成可上架的商品主图。</p><div class="hero-actions"><button class="primary-btn large" type="button" data-scroll="dashboard">立即免费生成</button><a class="secondary-btn large" href="#cases">查看生成案例</a></div><div class="platforms"><span>适用于 Amazon / Temu / Shopify</span><strong>amazon</strong><strong class="temu">TEMU</strong><strong class="shopify">Shopify</strong></div></div>
+      <div class="process-card card"><div class="process-grid"><div class="process-step"><b>原图</b><div class="product-stage messy-bg"><div class="earbuds"></div></div></div><div class="process-step"><b>自动抠图</b><div class="product-stage checker-bg"><div class="earbuds"></div></div></div><div class="process-step"><b>白底主图</b><div class="product-stage"><div class="earbuds"></div></div></div><div class="process-step passed"><b>合规检测通过</b><div class="product-stage pass-border"><div class="earbuds"></div><span class="pass-badge">✓ 检测通过</span></div></div></div></div>
     </section>
 
-    <section id="features" class="section-shell compact">
-      <div class="feature-grid">
-        <article class="card feature-card"><span class="feature-icon">▣</span><h3>自动抠图</h3><p>精准识别商品主体，生成透明 PNG。</p></article>
-        <article class="card feature-card"><span class="feature-icon">▧</span><h3>平台白底主图</h3><p>自动生成 Amazon / Temu / Shopify 可用主图。</p></article>
-        <article class="card feature-card"><span class="feature-icon">⌖</span><h3>智能居中排版</h3><p>自动控制商品占比、留白和画布尺寸。</p></article>
-        <article class="card feature-card"><span class="feature-icon success">盾</span><h3>合规检测</h3><p>检查背景、清晰度、尺寸、商品占比和疑似水印。</p></article>
-      </div>
-    </section>
-
-    <section id="templates" class="section-shell compact">
-      <div class="section-head">
-        <p class="eyebrow">Templates</p>
-        <h2>丰富的主图模板</h2>
-      </div>
-      <div class="template-grid" id="landingTemplates"></div>
-    </section>
-
-    <section class="section-shell compact">
-      <div class="workflow card">
-        <div class="workflow-step"><span>1</span><b>上传商品图</b><small>支持 JPG / PNG / WebP</small></div>
-        <div class="workflow-step"><span>2</span><b>选择主图模板</b><small>多平台尺寸和风格可选</small></div>
-        <div class="workflow-step"><span>3</span><b>AI 自动处理</b><small>抠图 / 白底 / 排版 / 检测</small></div>
-        <div class="workflow-step"><span>4</span><b>下载上架图片</b><small>多尺寸导出，一键上架</small></div>
-      </div>
-    </section>
-
-    <section id="cases" class="section-shell compact">
-      <div class="compare card">
-        <div class="compare-before messy-bg"><span>Before</span><div class="bottle"></div></div>
-        <div class="compare-after"><span>After</span><div class="bottle"></div></div>
-      </div>
-    </section>
-
-    <section id="pricing" class="section-shell compact">
-      <div class="pricing-grid">
-        <article class="card price-card"><h3>免费版</h3><p>注册送 5 次</p><strong>¥0</strong><ul><li>5 次免费生成</li><li>单张导出</li><li>基础模板</li></ul></article>
-        <article class="card price-card recommended"><span class="recommend">推荐</span><h3>专业版</h3><p>适合日常商品图处理</p><strong>¥59/月</strong><ul><li>每月 500 次生成</li><li>多尺寸导出</li><li>高清导出</li></ul></article>
-        <article class="card price-card"><h3>商家版</h3><p>支持批量 SKU 和团队协作</p><strong>¥199/月</strong><ul><li>批量 SKU</li><li>团队协作</li><li>API 接口</li></ul></article>
-      </div>
-      <div class="bottom-cta">
-        <div><h2>现在生成你的第一张商品主图</h2><p>免费体验 AI 商品主图生成，提升转化，从高质量主图开始。</p></div>
-        <button class="light-btn" type="button" data-scroll="dashboard">免费开始</button>
-      </div>
-    </section>
+    <section id="features" class="section-shell compact"><div class="feature-grid"><article class="card feature-card"><span class="feature-icon">▣</span><h3>自动抠图</h3><p>精准识别商品主体，生成透明 PNG。</p></article><article class="card feature-card"><span class="feature-icon">▧</span><h3>平台白底主图</h3><p>自动生成 Amazon / Temu / Shopify 可用主图。</p></article><article class="card feature-card"><span class="feature-icon">⌖</span><h3>智能居中排版</h3><p>自动控制商品占比、留白和画布尺寸。</p></article><article class="card feature-card"><span class="feature-icon success">盾</span><h3>合规检测</h3><p>检查背景、清晰度、尺寸、商品占比和疑似水印。</p></article></div></section>
+    <section id="templates" class="section-shell compact"><div class="section-head"><p class="eyebrow">Templates</p><h2>丰富的主图模板</h2></div><div class="template-grid" id="landingTemplates"></div></section>
+    <section class="section-shell compact"><div class="workflow card"><div class="workflow-step"><span>1</span><b>上传商品图</b><small>支持 JPG / PNG / WebP</small></div><div class="workflow-step"><span>2</span><b>选择主图模板</b><small>多平台尺寸和风格可选</small></div><div class="workflow-step"><span>3</span><b>AI 自动处理</b><small>抠图 / 白底 / 排版 / 检测</small></div><div class="workflow-step"><span>4</span><b>下载上架图片</b><small>多尺寸导出，一键上架</small></div></div></section>
+    <section id="cases" class="section-shell compact"><div class="compare card"><div class="compare-before messy-bg"><span>Before</span><div class="bottle"></div></div><div class="compare-after"><span>After</span><div class="bottle"></div></div></div></section>
+    <section id="pricing" class="section-shell compact"><div class="pricing-grid"><article class="card price-card"><h3>免费版</h3><p>注册送 5 次</p><strong>¥0</strong><ul><li>5 次免费生成</li><li>单张导出</li><li>基础模板</li></ul></article><article class="card price-card recommended"><span class="recommend">推荐</span><h3>专业版</h3><p>适合日常商品图处理</p><strong>¥59/月</strong><ul><li>每月 500 次生成</li><li>多尺寸导出</li><li>高清导出</li></ul></article><article class="card price-card"><h3>商家版</h3><p>支持批量 SKU 和团队协作</p><strong>¥199/月</strong><ul><li>批量 SKU</li><li>团队协作</li><li>API 接口</li></ul></article></div><div class="bottom-cta"><div><h2>现在生成你的第一张商品主图</h2><p>免费体验 AI 商品主图生成，提升转化，从高质量主图开始。</p></div><button class="light-btn" type="button" data-scroll="dashboard">免费开始</button></div></section>
 
     <section id="dashboard" class="dashboard-wrap">
-      <aside class="sidebar">
-        <a class="brand sidebar-brand" href="#landing"><span class="brand-mark">P</span><span><strong>ProductShot AI</strong><small>AI 商品主图工厂</small></span></a>
-        <nav>
-          <a class="active">↥ 新建主图</a>
-          <a>□ 我的项目</a>
-          <a>◷ 生成历史</a>
-          <a>▦ 模板中心</a>
-          <a>◎ 积分记录</a>
-          <a>⚙ 设置</a>
-        </nav>
-        <div class="plan-card">
-          <b>专业版 <span>当前套餐</span></b>
-          <small>本月已用积分 120 / 1000</small>
-          <div class="usage"><i></i></div>
-          <button class="primary-btn" type="button">升级套餐</button>
-        </div>
-      </aside>
-
+      <aside class="sidebar"><a class="brand sidebar-brand" href="#landing"><span class="brand-mark">P</span><span><strong>ProductShot AI</strong><small>AI 商品主图工厂</small></span></a><nav><a class="active">↥ 新建主图</a><a>□ 我的项目</a><a>◷ 生成历史</a><a>▦ 模板中心</a><a>◎ 积分记录</a><a>⚙ 设置</a></nav><div class="plan-card"><b>专业版 <span>当前套餐</span></b><small>本月已用积分 120 / 1000</small><div class="usage"><i></i></div><button class="primary-btn" type="button">升级套餐</button></div></aside>
       <section class="dashboard-main">
-        <div class="dash-header">
-          <div><p class="eyebrow">Workspace</p><h2>ProductShot AI 工作台</h2></div>
-          <div class="dash-actions"><span class="credit">当前积分：120</span><button class="primary-btn" type="button">升级套餐</button><span class="avatar">👤</span></div>
-        </div>
-
+        <div class="dash-header"><div><p class="eyebrow">Workspace</p><h2>ProductShot AI 工作台</h2></div><div class="dash-actions"><span class="credit">当前积分：120</span><button class="primary-btn" type="button">升级套餐</button><span class="avatar">👤</span></div></div>
         <div class="workspace-grid">
-          <section class="card panel upload-panel">
-            <h3>上传商品图</h3>
-            <label class="dropzone" for="fileInput">
-              <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" />
-              <span>☁</span>
-              <b>拖拽图片到此处上传</b>
-              <small>或点击选择文件</small>
-            </label>
-            <p class="hint">支持 JPG、PNG、WebP，建议图片清晰、商品完整</p>
-            <div class="uploaded-preview" id="uploadedPreview">
-              <div class="demo-shot messy-bg"><div class="bottle"></div></div>
-              <p><b>等待上传商品图</b><small>上传后会显示原图预览</small></p>
-            </div>
-            <div id="uploadStatus" class="status-text"></div>
-          </section>
-
-          <section class="card panel preview-panel">
-            <div class="tabs" id="previewTabs">
-              <button type="button" data-tab="original">原图</button>
-              <button type="button" data-tab="cutout">抠图</button>
-              <button class="active" type="button" data-tab="white">白底主图</button>
-              <button type="button" data-tab="compliance">合规检测</button>
-            </div>
-            <div class="preview-canvas" id="previewCanvas">
-              <span class="generated-badge" id="generatedBadge">待生成</span>
-              <div class="big-demo-product" id="demoProduct"></div>
-              <img id="resultImage" alt="生成结果预览" hidden />
-            </div>
-            <div class="canvas-tools"><button type="button">−</button><span>100%</span><button type="button">＋</button><button type="button">⛶</button></div>
-          </section>
-
+          <section class="card panel upload-panel"><h3>上传商品图</h3><label class="dropzone" for="fileInput"><input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" /><span>☁</span><b>拖拽图片到此处上传</b><small>或点击选择文件</small></label><p class="hint">支持 JPG、PNG、WebP，建议图片清晰、商品完整</p><div class="uploaded-preview" id="uploadedPreview"><div class="demo-shot messy-bg"><div class="bottle"></div></div><p><b>等待上传商品图</b><small>上传后会显示原图预览</small></p></div><div id="uploadStatus" class="status-text"></div></section>
+          <section class="card panel preview-panel"><div class="tabs" id="previewTabs"><button type="button" data-tab="original">原图</button><button type="button" data-tab="cutout">抠图</button><button class="active" type="button" data-tab="white">白底主图</button><button type="button" data-tab="compliance">合规检测</button></div><div class="preview-canvas" id="previewCanvas"><span class="generated-badge" id="generatedBadge">待生成</span><div class="big-demo-product" id="demoProduct"></div><img id="resultImage" alt="生成结果预览" hidden /></div><div class="canvas-tools"><button type="button">−</button><span>100%</span><button type="button">＋</button><button type="button">⛶</button></div></section>
           <section class="card panel settings-panel">
-            <h3>主图设置</h3>
-            <label>模板选择</label>
-            <div class="template-options" id="templateOptions"></div>
-            <label>尺寸选择</label>
-            <div class="size-options" id="sizeOptions">
-              <button type="button" data-width="1000" data-height="1000">1000 × 1000</button>
-              <button class="active" type="button" data-width="1600" data-height="1600">1600 × 1600</button>
-              <button type="button" data-width="2000" data-height="2000">2000 × 2000</button>
-              <button id="customSizeBtn" type="button" data-custom="true">自定义</button>
-            </div>
-            <label for="ratioRange">商品占比 <span id="ratioText">85%</span></label>
-            <input id="ratioRange" class="range" type="range" min="45" max="92" value="85" />
-            <label>背景</label>
-            <div class="background-options" id="backgroundOptions">
-              <button class="active" type="button" data-bg="white">纯白</button>
-              <button type="button" data-bg="transparent">透明</button>
-              <button type="button" data-bg="light-gray">浅灰</button>
-              <button type="button" data-bg="#F7F9FC">自定义颜色</button>
-            </div>
-            <label>增强选项</label>
-            <div class="check-grid">
-              <label><input id="autoEnhance" type="checkbox" checked /> 自动补光</label>
-              <label><input id="edgeRepair" type="checkbox" checked /> 边缘修复</label>
-              <label><input id="sharpness" type="checkbox" checked /> 清晰化</label>
-              <label><input id="addShadow" type="checkbox" checked /> 添加自然阴影</label>
-              <label><input type="checkbox" checked /> 保持商品细节不变</label>
-            </div>
-            <button class="primary-btn generate-btn" id="generateBtn" type="button">✦ 生成主图</button>
+            <h3>主图设置</h3><label>模板选择</label><div class="template-options" id="templateOptions"></div><label>尺寸选择</label>
+            <div class="size-options" id="sizeOptions"><button type="button" data-width="1000" data-height="1000">1000 × 1000</button><button class="active" type="button" data-width="1600" data-height="1600">1600 × 1600</button><button type="button" data-width="2000" data-height="2000">2000 × 2000</button><button id="customSizeBtn" type="button" data-custom="true">自定义</button></div>
+            <label for="ratioRange">商品占比 <span id="ratioText">85%</span></label><input id="ratioRange" class="range" type="range" min="45" max="92" value="85" />
+            <label>背景</label><div class="background-options" id="backgroundOptions"><button class="active" type="button" data-bg="white">纯白</button><button type="button" data-bg="transparent">透明</button><button type="button" data-bg="light-gray">浅灰</button><button id="customColorBtn" type="button" data-bg="custom">自定义颜色</button></div>
+            <div class="custom-color-row" id="customColorRow" hidden><input id="customColorInput" type="color" value="#F7F9FC" aria-label="选择自定义背景色" /><div><b>自定义背景色 <span class="color-value" id="customColorText">#F7F9FC</span></b><small>生成请求会使用这个 hex 颜色值。</small></div></div>
+            <label>增强选项</label><div class="check-grid"><label><input id="autoEnhance" type="checkbox" checked /> 自动补光</label><label><input id="edgeRepair" type="checkbox" checked /> 边缘修复</label><label><input id="sharpness" type="checkbox" checked /> 清晰化</label><label><input id="addShadow" type="checkbox" checked /> 添加自然阴影</label><label><input type="checkbox" checked /> 保持商品细节不变</label></div><button class="primary-btn generate-btn" id="generateBtn" type="button">✦ 生成主图</button>
           </section>
         </div>
-
-        <div class="result-layout">
-          <section class="card panel">
-            <div class="panel-head"><h3>生成结果</h3><button class="ghost-btn" id="refreshHistoryBtn" type="button">刷新历史</button></div>
-            <div class="result-grid" id="resultGrid"></div>
-          </section>
-          <section class="card panel compliance-card" id="complianceCard">
-            <div class="panel-head"><h3>合规检测</h3><span class="pass-pill">待检测</span></div>
-            <div class="score"><strong id="scoreText">--</strong><span>/ 100</span></div>
-            <ul id="complianceList">
-              <li>上传并生成后展示检测结果</li>
-            </ul>
-            <button class="secondary-btn full" type="button">查看详细报告</button>
-          </section>
-        </div>
+        <div class="result-layout"><section class="card panel"><div class="panel-head"><h3>生成结果</h3><button class="ghost-btn" id="refreshHistoryBtn" type="button">刷新历史</button></div><div class="result-grid" id="resultGrid"></div></section><section class="card panel compliance-card" id="complianceCard"><div class="panel-head"><h3>合规检测</h3><span class="pass-pill">待检测</span></div><div class="score"><strong id="scoreText">--</strong><span>/ 100</span></div><ul id="complianceList"><li>上传并生成后展示检测结果</li></ul><button class="secondary-btn full" type="button">查看详细报告</button></section></div>
       </section>
     </section>
   </main>
 
-  <div class="modal-overlay" id="customSizeModal" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customSizeTitle">
-      <div class="modal-head">
-        <div>
-          <h3 id="customSizeTitle">自定义导出尺寸</h3>
-          <p>输入主图画布宽高，范围 512 到 4096 像素。</p>
-        </div>
-        <button class="modal-close" id="closeCustomSizeBtn" type="button" aria-label="关闭">×</button>
-      </div>
-      <div class="size-form-grid">
-        <div>
-          <span class="field-label">宽度 px</span>
-          <input class="size-input" id="customWidthInput" type="number" min="512" max="4096" step="1" inputmode="numeric" />
-        </div>
-        <div>
-          <span class="field-label">高度 px</span>
-          <input class="size-input" id="customHeightInput" type="number" min="512" max="4096" step="1" inputmode="numeric" />
-        </div>
-      </div>
-      <p class="modal-hint">建议常用：1000×1000、1600×1600、2000×2000。移动端商品流可用 1600×2000。</p>
-      <div class="modal-error" id="customSizeError"></div>
-      <div class="modal-actions">
-        <button class="ghost-btn" id="cancelCustomSizeBtn" type="button">取消</button>
-        <button class="primary-btn" id="applyCustomSizeBtn" type="button">使用这个尺寸</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="mobile-action"><button class="primary-btn" id="mobileGenerateBtn" type="button">✦ 生成主图</button></div>
-  <script src="./app.js"></script>
+  <div class="modal-overlay" id="customSizeModal" hidden><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="customSizeTitle"><div class="modal-head"><div><h3 id="customSizeTitle">自定义导出尺寸</h3><p>输入主图画布宽高，范围 512 到 4096 像素。</p></div><button class="modal-close" id="closeCustomSizeBtn" type="button" aria-label="关闭">×</button></div><div class="size-form-grid"><div><span class="field-label">宽度 px</span><input class="size-input" id="customWidthInput" type="number" min="512" max="4096" step="1" inputmode="numeric" /></div><div><span class="field-label">高度 px</span><input class="size-input" id="customHeightInput" type="number" min="512" max="4096" step="1" inputmode="numeric" /></div></div><p class="modal-hint">建议常用：1000×1000、1600×1600、2000×2000。移动端商品流可用 1600×2000。</p><div class="modal-error" id="customSizeError"></div><div class="modal-actions"><button class="ghost-btn" id="cancelCustomSizeBtn" type="button">取消</button><button class="primary-btn" id="applyCustomSizeBtn" type="button">使用这个尺寸</button></div></div></div>
+  <div class="mobile-action"><button class="primary-btn" id="mobileGenerateBtn" type="button">✦ 生成主图</button></div><script src="./app.js"></script>
 </body>
 </html>
