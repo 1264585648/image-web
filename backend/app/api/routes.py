@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import io
 import json
+import re
+import zipfile
 from pathlib import Path
 from uuid import uuid4
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
 from PIL import Image, ImageOps
 
@@ -39,6 +44,19 @@ def _storage_public_url(path: Path) -> str:
     except ValueError:
         relative = Path(path.name)
     return f"{settings.public_base_url.rstrip('/')}/storage/{relative.as_posix()}"
+
+
+def _safe_download_name(value: str) -> str:
+    """Return a readable ASCII-ish file name segment for zip entries."""
+    normalized = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
+    normalized = normalized.strip(".-_")
+    return normalized or "asset"
+
+
+def _zip_asset_name(asset: GeneratedAsset, index: int) -> str:
+    suffix = Path(asset.file_path).suffix.lower() or ".png"
+    output_type = _safe_download_name(asset.output_type)
+    return f"{index:02d}-{output_type}-{asset.width}x{asset.height}{suffix}"
 
 
 def _asset_to_out(asset: GeneratedAsset) -> AssetOut:
@@ -281,6 +299,41 @@ def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskOut:
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return _task_to_out(task)
+
+
+@router.get("/tasks/{task_id}/download.zip")
+def download_task_assets(task_id: str, db: Session = Depends(get_db)) -> StreamingResponse:
+    task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not task.assets:
+        raise HTTPException(status_code=404, detail="No generated assets found for this task")
+
+    existing_assets: list[GeneratedAsset] = []
+    missing_assets: list[str] = []
+    for asset in task.assets:
+        if Path(asset.file_path).exists():
+            existing_assets.append(asset)
+        else:
+            missing_assets.append(asset.output_type)
+
+    if not existing_assets:
+        raise HTTPException(status_code=404, detail="Generated asset files are missing")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for index, asset in enumerate(existing_assets, start=1):
+            archive.write(asset.file_path, arcname=_zip_asset_name(asset, index))
+        if missing_assets:
+            archive.writestr(
+                "README.txt",
+                "Some generated files were missing and were not included:\n" + "\n".join(f"- {name}" for name in missing_assets),
+            )
+    buffer.seek(0)
+
+    filename = f"productshot-{_safe_download_name(task.id)}.zip"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(buffer, media_type="application/zip", headers=headers)
 
 
 @router.get("/history", response_model=HistoryOut)
