@@ -62,6 +62,8 @@ class TaskOut(BaseModel):
     source_image_id: str
     template_id: str
     status: str
+    progress: int = 0
+    current_step: str | None = None
     error_message: str | None
     compliance_score: float | None
     created_at: datetime
