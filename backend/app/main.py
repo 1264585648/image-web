@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -25,5 +27,22 @@ def on_startup() -> None:
     init_db()
 
 
+def _resolve_frontend_dir() -> Path | None:
+    """Find the static frontend directory in local and Docker layouts."""
+    candidates = [
+        Path("frontend"),
+        Path(__file__).resolve().parents[1] / "frontend",
+        Path(__file__).resolve().parents[2] / "frontend",
+    ]
+    for candidate in candidates:
+        if (candidate / "index.html").exists():
+            return candidate
+    return None
+
+
 app.include_router(router)
 app.mount("/storage", StaticFiles(directory=settings.storage_dir), name="storage")
+
+frontend_dir = _resolve_frontend_dir()
+if frontend_dir is not None:
+    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
