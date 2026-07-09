@@ -7,16 +7,41 @@ import zipfile
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session, selectinload
 from PIL import Image, ImageOps, UnidentifiedImageError
+from sqlalchemy.orm import Session, selectinload
 
-from app.auth import check_login_rate_limit, clear_login_attempts, create_access_token, create_resource_signature, get_current_user, hash_password, normalize_email, record_failed_login, verify_password, verify_resource_signature
+from app.auth import (
+    check_login_rate_limit,
+    clear_auth_cookie,
+    clear_login_attempts,
+    create_access_token,
+    create_resource_signature,
+    get_current_user,
+    hash_password,
+    normalize_email,
+    record_failed_login,
+    set_auth_cookie,
+    verify_password,
+    verify_resource_signature,
+)
 from app.config import get_settings
 from app.database import SessionLocal, get_db
 from app.models import GeneratedAsset, GenerationTask, SourceImage, User
-from app.schemas import AssetOut, AuthLoginRequest, AuthRegisterRequest, AuthTokenOut, ComplianceReport, GenerateRequest, HistoryOut, SourceImageOut, TaskOut, TemplateOut, UserOut
+from app.schemas import (
+    AssetOut,
+    AuthLoginRequest,
+    AuthRegisterRequest,
+    AuthTokenOut,
+    ComplianceReport,
+    GenerateRequest,
+    HistoryOut,
+    SourceImageOut,
+    TaskOut,
+    TemplateOut,
+    UserOut,
+)
 from app.services.image_pipeline import compose_subject_image, prepare_subject
 from app.templates import TEMPLATES, get_template
 
@@ -42,17 +67,6 @@ def _safe_extension(file: UploadFile) -> str:
     if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
         return ".jpg" if suffix == ".jpeg" else suffix
     return CONTENT_TYPE_EXTENSIONS.get(file.content_type or "", ".png")
-
-
-def _storage_public_url(path: Path) -> str:
-    settings = get_settings()
-    storage_root = settings.storage_path.resolve()
-    resolved_path = path.resolve()
-    try:
-        relative = resolved_path.relative_to(storage_root)
-    except ValueError:
-        relative = Path(path.name)
-    return f"{settings.public_base_url.rstrip('/')}/storage/{relative.as_posix()}"
 
 
 def _signed_resource_url(kind: str, resource_id: str, route_path: str) -> str:
@@ -126,6 +140,9 @@ def _friendly_generation_error(exc: Exception) -> str:
 
 
 def _client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+    if forwarded_for:
+        return forwarded_for
     return request.client.host if request.client else "unknown"
 
 
@@ -181,7 +198,12 @@ def _task_to_out(task: GenerationTask) -> TaskOut:
 
 
 def _task_for_user(db: Session, task_id: str, user_id: str) -> GenerationTask | None:
-    return db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id, GenerationTask.user_id == user_id).first()
+    return (
+        db.query(GenerationTask)
+        .options(selectinload(GenerationTask.assets))
+        .filter(GenerationTask.id == task_id, GenerationTask.user_id == user_id)
+        .first()
+    )
 
 
 def _set_task_progress(db: Session, task: GenerationTask, *, status: str | None = None, progress: int | None = None, current_step: str | None = None) -> None:
@@ -196,7 +218,16 @@ def _set_task_progress(db: Session, task: GenerationTask, *, status: str | None 
 
 
 def _create_generation_task(db: Session, request: GenerateRequest, template_id: str, user_id: str) -> GenerationTask:
-    task = GenerationTask(id=str(uuid4()), user_id=user_id, source_image_id=request.source_image_id, template_id=template_id, status="queued", progress=0, current_step=STEP_CREATED, request_json=request.model_dump_json())
+    task = GenerationTask(
+        id=str(uuid4()),
+        user_id=user_id,
+        source_image_id=request.source_image_id,
+        template_id=template_id,
+        status="queued",
+        progress=0,
+        current_step=STEP_CREATED,
+        request_json=request.model_dump_json(),
+    )
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -209,10 +240,22 @@ def _variant_requests(request: GenerateRequest, width: int, height: int) -> list
     base_shadow = template.shadow_enabled if request.add_shadow is None else request.add_shadow
     base_format = request.output_format.lower().replace("jpeg", "jpg")
     variants: list[tuple[str, GenerateRequest]] = [
-        (request.template_id, request.model_copy(update={"width": width, "height": height, "background": base_background, "add_shadow": base_shadow, "output_format": base_format})),
-        ("transparent-png", request.model_copy(update={"template_id": "transparent-png", "width": width, "height": height, "background": "transparent", "add_shadow": False, "output_format": "png"})),
-        ("soft-shadow-packshot", request.model_copy(update={"template_id": "soft-shadow-packshot", "width": width, "height": height, "background": "white", "add_shadow": True, "output_format": "png"})),
-        ("hd-2000px", request.model_copy(update={"width": max(width, 2000), "height": max(height, 2000), "background": "transparent" if base_background == "transparent" else "white", "add_shadow": base_shadow and base_background != "transparent", "output_format": "png"})),
+        (
+            request.template_id,
+            request.model_copy(update={"width": width, "height": height, "background": base_background, "add_shadow": base_shadow, "output_format": base_format}),
+        ),
+        (
+            "transparent-png",
+            request.model_copy(update={"template_id": "transparent-png", "width": width, "height": height, "background": "transparent", "add_shadow": False, "output_format": "png"}),
+        ),
+        (
+            "soft-shadow-packshot",
+            request.model_copy(update={"template_id": "soft-shadow-packshot", "width": width, "height": height, "background": "white", "add_shadow": True, "output_format": "png"}),
+        ),
+        (
+            "hd-2000px",
+            request.model_copy(update={"width": max(width, 2000), "height": max(height, 2000), "background": "transparent" if base_background == "transparent" else "white", "add_shadow": base_shadow and base_background != "transparent", "output_format": "png"}),
+        ),
     ]
     deduped: list[tuple[str, GenerateRequest]] = []
     seen: set[tuple] = set()
@@ -256,7 +299,16 @@ def _run_generation_task(task_id: str) -> None:
             created_paths.append(output_path)
             saved_path, report = compose_subject_image(subject, variant_request, output_path)
             asset_id = str(uuid4())
-            asset = GeneratedAsset(id=asset_id, task_id=task.id, output_type=output_type, file_path=str(saved_path), public_url=_signed_asset_url(asset_id), width=variant_width, height=variant_height, compliance_json=json.dumps(report.to_dict(), ensure_ascii=False))
+            asset = GeneratedAsset(
+                id=asset_id,
+                task_id=task.id,
+                output_type=output_type,
+                file_path=str(saved_path),
+                public_url=_signed_asset_url(asset_id),
+                width=variant_width,
+                height=variant_height,
+                compliance_json=json.dumps(report.to_dict(), ensure_ascii=False),
+            )
             if primary_score is None:
                 primary_score = report.score
             db.add(asset)
@@ -313,7 +365,7 @@ def view_asset(asset_id: str, expires: int, sig: str, db: Session = Depends(get_
 
 
 @router.post("/auth/register", response_model=AuthTokenOut)
-def register(payload: AuthRegisterRequest, db: Session = Depends(get_db)) -> AuthTokenOut:
+def register(payload: AuthRegisterRequest, response: Response, db: Session = Depends(get_db)) -> AuthTokenOut:
     email = normalize_email(payload.email)
     exists = db.query(User).filter(User.email == email).first()
     if exists is not None:
@@ -322,11 +374,13 @@ def register(payload: AuthRegisterRequest, db: Session = Depends(get_db)) -> Aut
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _auth_token_for_user(user)
+    token = _auth_token_for_user(user)
+    set_auth_cookie(response, token.access_token)
+    return token
 
 
 @router.post("/auth/login", response_model=AuthTokenOut)
-def login(payload: AuthLoginRequest, request: Request, db: Session = Depends(get_db)) -> AuthTokenOut:
+def login(payload: AuthLoginRequest, request: Request, response: Response, db: Session = Depends(get_db)) -> AuthTokenOut:
     email = normalize_email(payload.email)
     client_ip = _client_ip(request)
     check_login_rate_limit(email, client_ip)
@@ -338,7 +392,15 @@ def login(payload: AuthLoginRequest, request: Request, db: Session = Depends(get
         record_failed_login(email, client_ip)
         raise HTTPException(status_code=403, detail="账号已停用")
     clear_login_attempts(email, client_ip)
-    return _auth_token_for_user(user)
+    token = _auth_token_for_user(user)
+    set_auth_cookie(response, token.access_token)
+    return token
+
+
+@router.post("/auth/logout")
+def logout(response: Response) -> dict:
+    clear_auth_cookie(response)
+    return {"ok": True}
 
 
 @router.get("/auth/me", response_model=UserOut)
@@ -372,7 +434,16 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
     except Exception as exc:
         absolute_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="图片无法读取，请确认文件未损坏后重新上传") from exc
-    source = SourceImage(id=image_id, user_id=current_user.id, original_filename=Path(file.filename or f"{image_id}{suffix}").name, file_path=str(absolute_path), public_url=_signed_source_image_url(image_id), width=width, height=height, content_type=file.content_type or "application/octet-stream")
+    source = SourceImage(
+        id=image_id,
+        user_id=current_user.id,
+        original_filename=Path(file.filename or f"{image_id}{suffix}").name,
+        file_path=str(absolute_path),
+        public_url=_signed_source_image_url(image_id),
+        width=width,
+        height=height,
+        content_type=file.content_type or "application/octet-stream",
+    )
     db.add(source)
     db.commit()
     db.refresh(source)
