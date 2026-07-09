@@ -32,22 +32,32 @@ function getTaskStatusText(status) {
   return status || '生成中';
 }
 
+function getTaskProgressText(task) {
+  const statusText = getTaskStatusText(task?.status);
+  const progress = Number.isFinite(task?.progress) ? Math.max(0, Math.min(100, Math.round(task.progress))) : null;
+  const step = task?.current_step || statusText;
+  if (task?.status === 'success') return '已生成';
+  if (task?.status === 'failed') return '生成失败';
+  return progress === null ? step : `${step} ${progress}%`;
+}
+
+function syncTaskProgressUI(task) {
+  const terminal = TERMINAL_TASK_STATUSES.has(task?.status);
+  const badgeClass = task?.status === 'failed' ? 'error' : (task?.status === 'success' ? 'success' : '');
+  const progressText = getTaskProgressText(task);
+  setGenerationBadge(progressText, badgeClass);
+  setGenerateBusy(!terminal, task?.status === 'queued' ? '排队中...' : `生成中 ${Math.max(0, Math.min(100, Math.round(task?.progress || 0)))}%`);
+}
+
 async function pollGenerationTask(taskId) {
   const startedAt = Date.now();
-  let lastStatus = '';
 
   while (Date.now() - startedAt < ASYNC_POLL_TIMEOUT_MS) {
     const task = await api(`/api/tasks/${encodeURIComponent(taskId)}`);
     state.lastTask = task;
     renderTask(task);
     updateDownloadAllButton(task);
-
-    if (task.status !== lastStatus) {
-      lastStatus = task.status;
-      const statusText = getTaskStatusText(task.status);
-      setGenerationBadge(statusText, task.status === 'failed' ? 'error' : (task.status === 'success' ? 'success' : ''));
-      setGenerateBusy(!TERMINAL_TASK_STATUSES.has(task.status), statusText === '排队中' ? '排队中...' : '生成中...');
-    }
+    syncTaskProgressUI(task);
 
     if (TERMINAL_TASK_STATUSES.has(task.status)) {
       return task;
@@ -79,11 +89,13 @@ async function generateImageWithPolling() {
 
     state.lastTask = task;
     renderTask(task);
+    syncTaskProgressUI(task);
     await loadHistory({ keepCurrent: true });
 
     const finalTask = TERMINAL_TASK_STATUSES.has(task.status) ? task : await pollGenerationTask(task.id);
     state.lastTask = finalTask;
     renderTask(finalTask);
+    syncTaskProgressUI(finalTask);
     await loadHistory({ keepCurrent: true });
 
     if (finalTask.status === 'success') {
