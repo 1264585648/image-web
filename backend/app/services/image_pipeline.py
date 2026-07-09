@@ -42,12 +42,13 @@ def _repair_alpha_edge(image: Image.Image) -> Image.Image:
     return Image.merge("RGBA", (r, g, b, a))
 
 
-def _auto_enhance(image: Image.Image) -> Image.Image:
+def _auto_enhance(image: Image.Image, *, sharpen: bool = True) -> Image.Image:
     rgb = image.convert("RGB")
     rgb = ImageOps.autocontrast(rgb, cutoff=1)
     rgb = ImageEnhance.Brightness(rgb).enhance(1.03)
     rgb = ImageEnhance.Contrast(rgb).enhance(1.05)
-    rgb = ImageEnhance.Sharpness(rgb).enhance(1.08)
+    if sharpen:
+        rgb = ImageEnhance.Sharpness(rgb).enhance(1.08)
     if image.mode == "RGBA":
         rgb.putalpha(image.getchannel("A"))
     return rgb.convert("RGBA")
@@ -88,14 +89,20 @@ def _add_shadow(canvas: Image.Image, subject: Image.Image, x: int, y: int) -> No
     canvas.alpha_composite(shadow, (x, y + offset_y))
 
 
-def prepare_subject(source_path: str | Path, *, edge_repair: bool = True, auto_enhance: bool = True) -> Image.Image:
+def prepare_subject(
+    source_path: str | Path,
+    *,
+    edge_repair: bool = True,
+    auto_enhance: bool = True,
+    sharpen: bool = True,
+) -> Image.Image:
     """Run the expensive subject preparation once and reuse it for all output variants."""
     image = _open_image(source_path)
     subject = _remove_background(image)
     if edge_repair:
         subject = _repair_alpha_edge(subject)
     if auto_enhance:
-        subject = _auto_enhance(subject)
+        subject = _auto_enhance(subject, sharpen=sharpen)
     return subject.crop(_subject_bbox(subject))
 
 
@@ -149,5 +156,6 @@ def compose_main_image(
         source_path,
         edge_repair=request.edge_repair,
         auto_enhance=request.auto_enhance,
+        sharpen=request.sharpen,
     )
     return compose_subject_image(subject, request, output_path)
