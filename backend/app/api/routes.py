@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.config import get_settings
 from app.database import get_db
@@ -26,6 +26,9 @@ CONTENT_TYPE_EXTENSIONS = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+
+
+FRIENDLY_GENERATION_FALLBACK = "生成失败，请换一张更清晰、主体更完整、背景更干净的商品图后重试。"
 
 
 def _safe_extension(file: UploadFile) -> str:
@@ -57,6 +60,39 @@ def _zip_asset_name(asset: GeneratedAsset, index: int) -> str:
     suffix = Path(asset.file_path).suffix.lower() or ".png"
     output_type = _safe_download_name(asset.output_type)
     return f"{index:02d}-{output_type}-{asset.width}x{asset.height}{suffix}"
+
+
+def _friendly_generation_error(exc: Exception) -> str:
+    """Map low-level image errors to messages that are safe and useful in the UI/history."""
+    if isinstance(exc, UnidentifiedImageError):
+        return "图片无法读取，请确认文件未损坏，并重新上传 JPG、PNG 或 WebP 图片。"
+    if isinstance(exc, FileNotFoundError):
+        return "原图文件不存在，请重新上传商品图后再生成。"
+    if isinstance(exc, PermissionError):
+        return "图片保存失败，服务端没有写入权限，请检查 storage 目录权限。"
+    if isinstance(exc, MemoryError):
+        return "图片过大或处理占用内存过高，请压缩图片后重试。"
+
+    raw_message = str(exc).strip()
+    message = raw_message.lower()
+    if "cannot identify image file" in message or "unidentified" in message:
+        return "图片无法读取，请确认文件未损坏，并重新上传 JPG、PNG 或 WebP 图片。"
+    if "no such file" in message or "not found" in message:
+        return "原图文件不存在，请重新上传商品图后再生成。"
+    if "permission denied" in message:
+        return "图片保存失败，服务端没有写入权限，请检查 storage 目录权限。"
+    if "not enough memory" in message or "memory" in message:
+        return "图片过大或处理占用内存过高，请压缩图片后重试。"
+    if "output_format" in message or "unsupported format" in message or "unknown file extension" in message:
+        return "输出格式不支持，请选择 PNG、JPG 或 WebP 后重试。"
+    if "width" in message or "height" in message or "tile cannot extend outside image" in message:
+        return "图片尺寸或导出尺寸不符合要求，请使用更清晰的商品图，并保持导出尺寸在 512 到 4096 像素之间。"
+    if "background" in message or "color" in message or "hex" in message:
+        return "背景颜色参数不正确，请选择纯白、透明、浅灰或有效的自定义颜色。"
+
+    if raw_message and not any(token in raw_message for token in ["Traceback", "File \"", "app/", "site-packages", "PIL."]):
+        return raw_message
+    return FRIENDLY_GENERATION_FALLBACK
 
 
 def _asset_to_out(asset: GeneratedAsset) -> AssetOut:
@@ -182,7 +218,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
     settings = get_settings()
     allowed_types = set(CONTENT_TYPE_EXTENSIONS)
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG and WebP images are supported")
+        raise HTTPException(status_code=400, detail="仅支持 JPG、PNG 和 WebP 格式的商品图片")
 
     suffix = _safe_extension(file)
     image_id = str(uuid4())
@@ -196,7 +232,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
             bytes_written += len(chunk)
             if bytes_written > max_bytes:
                 absolute_path.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail=f"File is larger than {settings.max_upload_mb}MB")
+                raise HTTPException(status_code=413, detail=f"图片过大，最大支持 {settings.max_upload_mb}MB")
             buffer.write(chunk)
 
     try:
@@ -205,7 +241,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
             width, height = image.size
     except Exception as exc:
         absolute_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail="Invalid image file") from exc
+        raise HTTPException(status_code=400, detail="图片无法读取，请确认文件未损坏后重新上传") from exc
 
     source = SourceImage(
         id=image_id,
@@ -227,11 +263,11 @@ def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> T
     settings = get_settings()
     source = db.get(SourceImage, request.source_image_id)
     if source is None:
-        raise HTTPException(status_code=404, detail="Source image not found")
+        raise HTTPException(status_code=404, detail="原图不存在，请重新上传商品图")
     try:
         template = get_template(request.template_id)
     except KeyError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="模板不存在，请重新选择模板") from exc
 
     task_id = str(uuid4())
     task = GenerationTask(
@@ -279,13 +315,14 @@ def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> T
 
         task.status = "success"
         task.compliance_score = primary_score
+        task.error_message = None
         db.add(task)
         db.commit()
     except Exception as exc:
         for path in created_paths:
             path.unlink(missing_ok=True)
         task.status = "failed"
-        task.error_message = str(exc)
+        task.error_message = _friendly_generation_error(exc)
         db.add(task)
         db.commit()
 
@@ -297,7 +334,7 @@ def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> T
 def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskOut:
     task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
     if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="任务不存在")
     return _task_to_out(task)
 
 
@@ -305,9 +342,9 @@ def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskOut:
 def download_task_assets(task_id: str, db: Session = Depends(get_db)) -> StreamingResponse:
     task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
     if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="任务不存在")
     if not task.assets:
-        raise HTTPException(status_code=404, detail="No generated assets found for this task")
+        raise HTTPException(status_code=404, detail="当前任务没有可下载的生成结果")
 
     existing_assets: list[GeneratedAsset] = []
     missing_assets: list[str] = []
@@ -318,7 +355,7 @@ def download_task_assets(task_id: str, db: Session = Depends(get_db)) -> Streami
             missing_assets.append(asset.output_type)
 
     if not existing_assets:
-        raise HTTPException(status_code=404, detail="Generated asset files are missing")
+        raise HTTPException(status_code=404, detail="生成图片文件缺失，无法下载")
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -353,7 +390,7 @@ def history(limit: int = 30, db: Session = Depends(get_db)) -> HistoryOut:
 def delete_task(task_id: str, db: Session = Depends(get_db)) -> dict:
     task = db.query(GenerationTask).options(selectinload(GenerationTask.assets)).filter(GenerationTask.id == task_id).first()
     if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail="任务不存在")
     for asset in task.assets:
         Path(asset.file_path).unlink(missing_ok=True)
         db.delete(asset)
