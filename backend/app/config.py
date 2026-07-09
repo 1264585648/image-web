@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     auth_secret: str = "change-me-in-production-productshot-auth-secret"
     auth_token_expire_hours: int = 168
+    auth_cookie_name: str = "productshot_session"
     asset_url_expire_seconds: int = 3600
     login_rate_limit_max_attempts: int = 5
     login_rate_limit_window_seconds: int = 300
