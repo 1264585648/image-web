@@ -1,0 +1,11 @@
+services:
+  productshot-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env.example
+    volumes:
+      - ./storage:/app/storage
