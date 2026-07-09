@@ -23,18 +23,6 @@ CONTENT_TYPE_EXTENSIONS = {
 }
 
 
-class OutputVariant(tuple):
-    __slots__ = ()
-
-    @property
-    def output_type(self) -> str:
-        return self[0]
-
-    @property
-    def request(self) -> GenerateRequest:
-        return self[1]
-
-
 def _safe_extension(file: UploadFile) -> str:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix in {".jpg", ".jpeg", ".png", ".webp"}:
@@ -84,8 +72,9 @@ def _task_to_out(task: GenerationTask) -> TaskOut:
 
 def _variant_requests(request: GenerateRequest, width: int, height: int) -> list[tuple[str, GenerateRequest]]:
     """Return the product outputs shown in the UI while avoiding duplicate renders."""
-    base_background = request.background or get_template(request.template_id).background
-    base_shadow = get_template(request.template_id).shadow_enabled if request.add_shadow is None else request.add_shadow
+    template = get_template(request.template_id)
+    base_background = request.background or template.background
+    base_shadow = template.shadow_enabled if request.add_shadow is None else request.add_shadow
     base_format = request.output_format.lower().replace("jpeg", "jpg")
 
     variants: list[tuple[str, GenerateRequest]] = [
@@ -217,6 +206,7 @@ async def upload_image(file: UploadFile = File(...), db: Session = Depends(get_d
 
 @router.post("/generate", response_model=TaskOut)
 def generate_image(request: GenerateRequest, db: Session = Depends(get_db)) -> TaskOut:
+    settings = get_settings()
     source = db.get(SourceImage, request.source_image_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source image not found")
