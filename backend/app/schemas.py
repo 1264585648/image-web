@@ -6,6 +6,8 @@ class TemplateOut(BaseModel):
     id: str
     name: str
     platform: str
+    rule_set_id: str
+    rule_summary: str
     aspect_ratio: str
     width: int
     height: int
@@ -72,6 +74,11 @@ class ComplianceReport(BaseModel):
     checks: dict[str, bool]
     metrics: dict[str, float | int | str]
     warnings: list[str]
+    rule_set_id: str | None = None
+    rule_set_name: str | None = None
+    items: list[dict[str, str | bool | float | int | None]] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    qc_status: dict[str, str] = Field(default_factory=dict)
 
 
 class AssetOut(BaseModel):

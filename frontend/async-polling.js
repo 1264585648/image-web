@@ -259,6 +259,21 @@ function safeHTML(value) {
     .replaceAll("'", '&#039;');
 }
 
+function getComplianceStatusText(status, passed) {
+  if (status === 'not_run') return '未运行';
+  if (status === 'pass' || passed === true) return '通过';
+  if (status === 'fail' || passed === false) return '未通过';
+  if (status === 'warning') return '需确认';
+  return status || '需确认';
+}
+
+function getQcStatusText(status) {
+  if (status === 'not_run') return '接口已预留，当前未运行';
+  if (status === 'pass') return '通过';
+  if (status === 'fail') return '未通过';
+  return status || '未运行';
+}
+
 function openComplianceDetailModal() {
   const asset = getTaskPrimaryAsset(state.lastTask);
   const compliance = asset?.compliance;
@@ -271,15 +286,32 @@ function openComplianceDetailModal() {
   const checks = compliance.checks || {};
   const metrics = compliance.metrics || {};
   const warnings = compliance.warnings || [];
-  const checkRows = Object.entries(checks).map(([key, value]) => `
-    <tr><td>${safeHTML(key)}</td><td>${value ? '通过' : '未通过'}</td></tr>
-  `).join('');
+  const items = Array.isArray(compliance.items) ? compliance.items : [];
+  const recommendations = compliance.recommendations || [];
+  const qcStatus = compliance.qc_status || {};
+  const checkRows = items.length
+    ? items.map(item => `
+      <tr>
+        <td>${safeHTML(item.label || item.id)}</td>
+        <td>${safeHTML(getComplianceStatusText(item.status, item.passed))}</td>
+        <td>${safeHTML(item.message || '')}</td>
+      </tr>
+    `).join('')
+    : Object.entries(checks).map(([key, value]) => `
+      <tr><td>${safeHTML(key)}</td><td>${value ? '通过' : '未通过'}</td><td></td></tr>
+    `).join('');
   const metricRows = Object.entries(metrics).map(([key, value]) => `
     <tr><td>${safeHTML(key)}</td><td>${safeHTML(value)}</td></tr>
   `).join('');
   const warningRows = warnings.length
     ? warnings.map(item => `<li>${safeHTML(item)}</li>`).join('')
     : '<li>暂无警告</li>';
+  const recommendationRows = recommendations.length
+    ? recommendations.map(item => `<li>${safeHTML(item)}</li>`).join('')
+    : '<li>暂无修改建议</li>';
+  const qcRows = Object.entries(qcStatus).length
+    ? Object.entries(qcStatus).map(([key, value]) => `<li>${safeHTML(key)}：${safeHTML(getQcStatusText(value))}</li>`).join('')
+    : '<li>高级质检接口已预留，当前未运行</li>';
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -289,12 +321,12 @@ function openComplianceDetailModal() {
       <div class="modal-head">
         <div>
           <h3 id="complianceDetailTitle">详细合规报告</h3>
-          <p>当前模板：${safeHTML(getTemplateDisplayName(state.lastTask?.template_id))}，合规分：${safeHTML(Math.round(compliance.score ?? state.lastTask?.compliance_score ?? 0))}/100</p>
+          <p>当前模板：${safeHTML(getTemplateDisplayName(state.lastTask?.template_id))}，规则：${safeHTML(compliance.rule_set_name || metrics.rule_set_name || '平台规则')}，合规分：${safeHTML(Math.round(compliance.score ?? state.lastTask?.compliance_score ?? 0))}/100</p>
         </div>
         <button class="modal-close" type="button" data-close-compliance-detail aria-label="关闭">×</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-height:64vh;overflow:auto">
-        <section>
+        <section style="grid-column:1/-1">
           <h4 style="margin:0 0 10px">检查项</h4>
           <table style="width:100%;border-collapse:collapse;font-size:13px">${checkRows}</table>
         </section>
@@ -305,6 +337,14 @@ function openComplianceDetailModal() {
         <section style="grid-column:1/-1">
           <h4 style="margin:0 0 10px">警告</h4>
           <ul style="margin:0;padding-left:18px;color:var(--muted);line-height:1.7">${warningRows}</ul>
+        </section>
+        <section>
+          <h4 style="margin:0 0 10px">修改建议</h4>
+          <ul style="margin:0;padding-left:18px;color:var(--muted);line-height:1.7">${recommendationRows}</ul>
+        </section>
+        <section>
+          <h4 style="margin:0 0 10px">高级质检</h4>
+          <ul style="margin:0;padding-left:18px;color:var(--muted);line-height:1.7">${qcRows}</ul>
         </section>
       </div>
       <div class="modal-actions">
