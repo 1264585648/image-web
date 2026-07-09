@@ -1,5 +1,5 @@
 (function () {
-  const TOKEN_KEY = 'productshot_access_token';
+  const LEGACY_TOKEN_KEY = 'productshot_access_token';
   const USER_KEY = 'productshot_user';
   const originalFetch = window.fetch.bind(window);
   let currentUser = readUser();
@@ -17,19 +17,15 @@
     }
   }
 
-  function getToken() {
-    return localStorage.getItem(TOKEN_KEY) || '';
-  }
-
-  function setSession(token, user) {
-    localStorage.setItem(TOKEN_KEY, token);
+  function setSession(_token, user) {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     currentUser = user;
     updateAuthControls();
   }
 
   function clearSession() {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     currentUser = null;
     updateAuthControls();
@@ -62,23 +58,9 @@
   }
 
   window.fetch = async function authFetch(input, init = {}) {
-    if (!isProtectedApi(input)) {
-      return originalFetch(input, init);
-    }
-
-    const token = getToken();
-    if (!token) {
-      openAuthModal('请先登录后再使用上传、生成和历史记录。');
-      return new Response(JSON.stringify({ detail: '请先登录' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-    headers.set('Authorization', `Bearer ${token}`);
-    const response = await originalFetch(input, { ...init, headers });
-    if (response.status === 401) {
+    const nextInit = { ...init, credentials: init.credentials || 'include' };
+    const response = await originalFetch(input, nextInit);
+    if (isProtectedApi(input) && response.status === 401) {
       clearSession();
       openAuthModal('登录已过期，请重新登录。');
     }
@@ -89,6 +71,7 @@
     const response = await originalFetch(`${apiBase()}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
@@ -99,10 +82,8 @@
   }
 
   async function refreshMe() {
-    const token = getToken();
-    if (!token) return;
     const response = await originalFetch(`${apiBase()}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
     if (!response.ok) {
       clearSession();
@@ -146,7 +127,7 @@
           <div class="auth-error" id="authError"></div>
           <button class="primary-btn full" id="authSubmit" type="submit">登录</button>
           <p class="auth-toggle"><span id="authToggleText">还没有账号？</span><button id="authToggleBtn" type="button">注册一个</button></p>
-          <p class="auth-tip">MVP 登录使用服务端签名 token；生产环境请务必开启 HTTPS，并替换 AUTH_SECRET。</p>
+          <p class="auth-tip">会话使用 HttpOnly Cookie 保存，前端脚本无法直接读取 token；生产环境请务必开启 HTTPS。</p>
         </form>
       </div>`;
     document.body.appendChild(modal);
@@ -224,7 +205,15 @@
     }
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      await originalFetch(`${apiBase()}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (_) {
+      // Even if the network request fails, clear local UI state.
+    }
     clearSession();
     say('已退出登录', 'success');
     if (typeof window.clearCurrentTaskView === 'function') window.clearCurrentTaskView('请登录');
@@ -232,7 +221,7 @@
   }
 
   function updateAuthControls() {
-    const navButton = Array.from(document.querySelectorAll('.desktop-nav button')).find(button => button.textContent.includes('登录') || button.textContent.includes('进入工作台'));
+    const navButton = Array.from(document.querySelectorAll('.desktop-nav button')).find(button => button.textContent.includes('登录') || button.textContent.includes('进入工作台') || button.textContent.includes('我的工作台'));
     if (navButton) {
       navButton.textContent = currentUser ? '我的工作台' : '登录';
       navButton.onclick = event => {
@@ -278,10 +267,6 @@
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      if (!getToken()) {
-        openAuthModal('请先登录后再下载生成结果。');
-        return;
-      }
       try {
         button.disabled = true;
         button.textContent = '下载中...';
@@ -321,6 +306,6 @@
   window.ProductShotAuth = {
     open: openAuthModal,
     logout,
-    getToken,
+    getToken: () => '',
   };
 })();
