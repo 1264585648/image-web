@@ -1,0 +1,73 @@
+<svg width="1600" height="1100" viewBox="0 0 1600 1100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0B5CFF"/><stop offset="1" stop-color="#0747D9"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0B1736" flood-opacity="0.10"/></filter>
+    <style>
+      .bg{fill:#F7F9FC}.card{fill:#fff;stroke:#E3E9F3;stroke-width:1.4;filter:url(#shadow)}.card2{fill:#fff;stroke:#E3E9F3;stroke-width:1.2}.title{font:700 28px Inter,Arial,"Microsoft YaHei",sans-serif;fill:#0B1736}.h1{font:800 38px Inter,Arial,"Microsoft YaHei",sans-serif;fill:#0B1736}.txt{font:500 16px Inter,Arial,"Microsoft YaHei",sans-serif;fill:#60708A}.small{font:600 12px Inter,Arial,"Microsoft YaHei",sans-serif;fill:#60708A}.blueText{fill:#0B5CFF}.green{fill:#13A05F}.orange{fill:#F97316}.white{fill:#fff}.strokeBlue{stroke:#0B5CFF;stroke-width:2}.strokeGreen{stroke:#13A05F;stroke-width:2}.pill{fill:#EEF4FF;stroke:#CFE0FF;stroke-width:1}.btn{fill:url(#blue)}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="1100" rx="32"/>
+  <text x="56" y="68" class="h1">ProductShot AI · AI 商品主图工厂 高保真界面资产</text>
+  <text x="56" y="102" class="txt">统一视觉方向：干净 SaaS、电商工具、白底商品摄影、合规检测、响应式布局</text>
+
+  <!-- Desktop Landing -->
+  <g transform="translate(56 140)">
+    <rect class="card" width="690" height="420" rx="26"/>
+    <rect x="0" y="0" width="690" height="52" rx="26" fill="#fff"/>
+    <rect x="18" y="16" width="24" height="24" rx="7" fill="url(#blue)"/><text x="50" y="35" font-size="18" font-weight="800" fill="#0B1736">ProductShot AI</text>
+    <text x="470" y="34" class="small">功能　模板　定价　案例</text><rect x="596" y="13" width="76" height="28" rx="8" class="btn"/><text x="611" y="32" font-size="12" font-weight="700" fill="white">免费生成</text>
+    <text x="28" y="92" font-size="14" font-weight="800" fill="#0B5CFF">AI 商品主图生成</text>
+    <text x="28" y="140" class="h1">上传商品图，</text><text x="28" y="184" class="h1">一键生成平台合规主图</text>
+    <text x="28" y="226" class="txt">自动抠图、白底化、居中排版、轻阴影和多尺寸导出。</text>
+    <rect x="28" y="250" width="128" height="40" rx="10" class="btn"/><text x="54" y="276" font-size="15" font-weight="800" fill="white">立即免费生成</text>
+    <rect x="168" y="250" width="128" height="40" rx="10" fill="white" stroke="#B8C5D8"/><text x="194" y="276" font-size="15" font-weight="700" fill="#0B1736">查看案例</text>
+    <rect x="346" y="82" width="310" height="150" rx="18" class="card2"/>
+    <text x="374" y="110" class="small">原图</text><text x="448" y="110" class="small blueText">→</text><text x="486" y="110" class="small">自动抠图</text><text x="566" y="110" class="small blueText">→</text><text x="598" y="110" class="small green">检测通过</text>
+    <rect x="372" y="126" width="58" height="74" rx="10" fill="#E7E1D8"/><rect x="464" y="126" width="58" height="74" rx="10" fill="#F4F7FB"/><rect x="556" y="126" width="58" height="74" rx="10" fill="#fff" stroke="#13A05F"/>
+    <g transform="translate(388 146)"><ellipse cx="13" cy="44" rx="17" ry="5" fill="#000" opacity=".10"/><rect x="2" y="16" width="28" height="34" rx="12" fill="#fff" stroke="#D9E0EA"/><circle cx="10" cy="13" r="7" fill="#fff" stroke="#D9E0EA"/><circle cx="22" cy="13" r="7" fill="#fff" stroke="#D9E0EA"/></g>
+    <g transform="translate(480 146)"><ellipse cx="13" cy="44" rx="17" ry="5" fill="#000" opacity=".08"/><rect x="2" y="16" width="28" height="34" rx="12" fill="#fff" stroke="#D9E0EA"/><circle cx="10" cy="13" r="7" fill="#fff" stroke="#D9E0EA"/><circle cx="22" cy="13" r="7" fill="#fff" stroke="#D9E0EA"/></g>
+    <g transform="translate(572 146)"><ellipse cx="13" cy="44" rx="17" ry="5" fill="#000" opacity=".08"/><rect x="2" y="16" width="28" height="34" rx="12" fill="#fff" stroke="#D9E0EA"/><circle cx="10" cy="13" r="7" fill="#fff" stroke="#D9E0EA"/><circle cx="22" cy="13" r="7" fill="#fff" stroke="#D9E0EA"/></g>
+    <g transform="translate(28 322)"><rect width="145" height="68" rx="14" class="card2"/><text x="18" y="30" font-size="15" font-weight="800" fill="#0B1736">自动抠图</text><text x="18" y="50" class="small">透明 PNG</text></g>
+    <g transform="translate(188 322)"><rect width="145" height="68" rx="14" class="card2"/><text x="18" y="30" font-size="15" font-weight="800" fill="#0B1736">白底主图</text><text x="18" y="50" class="small">平台可用</text></g>
+    <g transform="translate(348 322)"><rect width="145" height="68" rx="14" class="card2"/><text x="18" y="30" font-size="15" font-weight="800" fill="#0B1736">居中排版</text><text x="18" y="50" class="small">占比 85%</text></g>
+    <g transform="translate(508 322)"><rect width="145" height="68" rx="14" class="card2"/><text x="18" y="30" font-size="15" font-weight="800" fill="#0B1736">合规检测</text><text x="18" y="50" class="small green">92 / 100</text></g>
+    <text x="0" y="456" class="title">桌面端首页 Landing Page</text>
+  </g>
+
+  <!-- Desktop Dashboard -->
+  <g transform="translate(830 140)">
+    <rect class="card" width="690" height="420" rx="26"/>
+    <rect x="0" y="0" width="92" height="420" rx="26" fill="#F1F5FB"/>
+    <rect x="18" y="20" width="30" height="30" rx="8" fill="url(#blue)"/><rect x="18" y="78" width="58" height="34" rx="10" class="btn"/><text x="20" y="100" font-size="11" font-weight="700" fill="white">新建主图</text>
+    <text x="112" y="38" class="title">ProductShot AI</text><rect x="522" y="18" width="76" height="30" rx="10" class="pill"/><text x="536" y="38" class="small">积分 120</text><rect x="610" y="18" width="54" height="30" rx="10" class="btn"/>
+    <rect x="112" y="70" width="150" height="210" rx="16" class="card2"/><text x="132" y="96" font-size="16" font-weight="800" fill="#0B1736">上传商品图</text><rect x="132" y="116" width="110" height="70" rx="12" fill="#F7FAFF" stroke="#94B9FF" stroke-dasharray="5 5"/><text x="154" y="158" class="small blueText">拖拽上传</text><rect x="132" y="206" width="110" height="56" rx="10" fill="#E8DAC8"/>
+    <rect x="280" y="70" width="210" height="210" rx="16" class="card2"/><text x="312" y="98" class="small">原图　抠图　</text><text x="386" y="98" class="small blueText">白底主图</text><rect x="324" y="116" width="120" height="136" rx="12" fill="#fff" stroke="#EDF1F7"/><ellipse cx="384" cy="236" rx="42" ry="9" fill="#000" opacity=".10"/><rect x="362" y="150" width="44" height="82" rx="15" fill="#9B4B17"/><rect x="360" y="170" width="48" height="38" rx="4" fill="#fff"/><rect x="370" y="130" width="28" height="26" rx="10" fill="#fff" stroke="#D9E0EA"/>
+    <rect x="506" y="70" width="164" height="210" rx="16" class="card2"/><text x="526" y="96" font-size="16" font-weight="800" fill="#0B1736">主图设置</text><rect x="526" y="116" width="58" height="26" rx="8" fill="#fff" stroke="#0B5CFF"/><text x="536" y="134" class="small blueText">Amazon</text><rect x="592" y="116" width="58" height="26" rx="8" fill="#fff" stroke="#E3E9F3"/><text x="602" y="134" class="small">Temu</text><line x1="526" y1="176" x2="648" y2="176" stroke="#DCE5F2" stroke-width="6" stroke-linecap="round"/><line x1="526" y1="176" x2="624" y2="176" stroke="#0B5CFF" stroke-width="6" stroke-linecap="round"/><circle cx="624" cy="176" r="7" fill="#0B5CFF"/><rect x="526" y="226" width="124" height="34" rx="10" class="btn"/><text x="558" y="248" font-size="13" font-weight="800" fill="white">生成主图</text>
+    <rect x="112" y="296" width="378" height="92" rx="16" class="card2"/><text x="132" y="322" font-size="16" font-weight="800" fill="#0B1736">生成结果</text><rect x="132" y="336" width="70" height="38" rx="8" fill="#fff" stroke="#E3E9F3"/><rect x="216" y="336" width="70" height="38" rx="8" fill="#fff" stroke="#E3E9F3"/><rect x="300" y="336" width="70" height="38" rx="8" fill="#fff" stroke="#E3E9F3"/><rect x="384" y="336" width="70" height="38" rx="8" fill="#fff" stroke="#E3E9F3"/>
+    <rect x="506" y="296" width="164" height="92" rx="16" class="card2"/><text x="526" y="322" font-size="16" font-weight="800" fill="#0B1736">合规检测</text><text x="526" y="360" font-size="34" font-weight="900" fill="#13A05F">92</text><text x="584" y="360" class="txt">/ 100</text>
+    <text x="0" y="456" class="title">桌面端工作台 Dashboard</text>
+  </g>
+
+  <!-- Mobile Landing -->
+  <g transform="translate(220 650)">
+    <rect class="card" width="250" height="390" rx="28"/>
+    <rect x="22" y="18" width="24" height="24" rx="8" fill="url(#blue)"/><text x="54" y="37" font-size="16" font-weight="800" fill="#0B1736">ProductShot AI</text><text x="218" y="37" font-size="24" font-weight="800" fill="#0B1736">≡</text>
+    <text x="76" y="76" font-size="12" font-weight="800" fill="#0B5CFF">AI 商品主图生成</text><text x="38" y="114" font-size="22" font-weight="900" fill="#0B1736">上传商品图，</text><text x="26" y="142" font-size="22" font-weight="900" fill="#0B1736">一键生成合规主图</text>
+    <rect x="38" y="166" width="174" height="34" rx="10" class="btn"/><text x="82" y="188" font-size="13" font-weight="800" fill="white">立即免费生成</text>
+    <rect x="24" y="218" width="202" height="70" rx="16" class="card2"/><text x="42" y="241" class="small">原图 → 抠图 → 白底 → </text><text x="166" y="241" class="small green">检测通过</text><rect x="54" y="254" width="32" height="24" rx="6" fill="#E7E1D8"/><rect x="110" y="254" width="32" height="24" rx="6" fill="#F4F7FB"/><rect x="166" y="254" width="32" height="24" rx="6" fill="#fff" stroke="#13A05F"/>
+    <rect x="24" y="304" width="96" height="46" rx="12" class="card2"/><text x="40" y="332" font-size="12" font-weight="800" fill="#0B1736">自动抠图</text><rect x="130" y="304" width="96" height="46" rx="12" class="card2"/><text x="146" y="332" font-size="12" font-weight="800" fill="#0B1736">合规检测</text>
+    <text x="22" y="428" class="title">手机端首页</text>
+  </g>
+
+  <!-- Mobile Dashboard -->
+  <g transform="translate(980 650)">
+    <rect class="card" width="250" height="390" rx="28"/>
+    <rect x="22" y="18" width="24" height="24" rx="8" fill="url(#blue)"/><text x="54" y="37" font-size="16" font-weight="800" fill="#0B1736">ProductShot AI</text><rect x="174" y="18" width="54" height="26" rx="9" class="pill"/><text x="184" y="35" class="small">积分120</text>
+    <rect x="18" y="62" width="214" height="70" rx="14" class="card2"/><text x="32" y="88" font-size="15" font-weight="800" fill="#0B1736">1. 上传商品图</text><rect x="34" y="100" width="72" height="22" rx="8" fill="#F7FAFF" stroke="#94B9FF" stroke-dasharray="4 4"/><text x="46" y="116" class="small blueText">点击上传</text><rect x="142" y="82" width="72" height="38" rx="8" fill="#E8DAC8"/>
+    <rect x="18" y="144" width="214" height="62" rx="14" class="card2"/><text x="32" y="168" font-size="15" font-weight="800" fill="#0B1736">2. 选择模板</text><rect x="32" y="178" width="70" height="20" rx="8" fill="#fff" stroke="#0B5CFF"/><text x="42" y="192" class="small blueText">Amazon</text><rect x="112" y="178" width="54" height="20" rx="8" fill="#fff" stroke="#E3E9F3"/><text x="124" y="192" class="small">Temu</text>
+    <rect x="18" y="218" width="214" height="78" rx="14" class="card2"/><text x="32" y="242" font-size="15" font-weight="800" fill="#0B1736">3. 预览结果</text><rect x="78" y="250" width="90" height="36" rx="8" fill="#fff" stroke="#EDF1F7"/><ellipse cx="123" cy="282" rx="26" ry="5" fill="#000" opacity=".10"/><rect x="114" y="258" width="18" height="22" rx="7" fill="#9B4B17"/><rect x="112" y="266" width="22" height="10" fill="#fff"/>
+    <rect x="18" y="308" width="214" height="46" rx="14" class="card2"/><text x="32" y="337" font-size="16" font-weight="900" fill="#13A05F">92</text><text x="64" y="337" class="txt">/100 合规通过</text><text x="164" y="337" class="small orange">疑似文字</text>
+    <rect x="18" y="362" width="214" height="40" rx="13" class="btn"/><text x="88" y="388" font-size="15" font-weight="900" fill="white">生成主图</text>
+    <text x="22" y="428" class="title">手机端工作台</text>
+  </g>
+</svg>
