@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     storage_dir: str = "./storage"
     public_base_url: str = "http://localhost:8000"
     max_upload_mb: int = 20
+    auth_secret: str = "change-me-in-production-productshot-auth-secret"
+    auth_token_expire_hours: int = 168
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
