@@ -1,4 +1,8 @@
 const API_BASE = window.PRODUCTSHOT_API_BASE || '';
+const MAX_UPLOAD_MB = 20;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+const ALLOWED_UPLOAD_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
 const state = {
   templates: [],
@@ -7,6 +11,7 @@ const state = {
   selectedSize: { width: 1600, height: 1600 },
   background: 'white',
   lastTask: null,
+  localPreviewUrl: null,
 };
 
 const templateIllustrations = {
@@ -89,6 +94,78 @@ function getTemplateName(template) {
   return escapeHTML(template?.name || assetLabels[template?.id] || template?.id || '模板');
 }
 
+function getFileExtension(file) {
+  return String(file?.name || '').split('.').pop()?.toLowerCase() || '';
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes)) return '未知大小';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function validateUploadFile(file) {
+  if (!file) {
+    return { ok: false, message: '请选择一张商品图片。' };
+  }
+
+  const extension = getFileExtension(file);
+  const typeAllowed = ALLOWED_UPLOAD_TYPES.has(file.type);
+  const extensionAllowed = ALLOWED_UPLOAD_EXTENSIONS.has(extension);
+  if (!typeAllowed && !extensionAllowed) {
+    return { ok: false, message: '仅支持 JPG、PNG、WebP 格式的商品图片。' };
+  }
+
+  if (!file.size) {
+    return { ok: false, message: '图片文件为空，请重新选择。' };
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { ok: false, message: `图片过大，当前 ${formatFileSize(file.size)}，最大支持 ${MAX_UPLOAD_MB}MB。` };
+  }
+
+  return { ok: true, message: '' };
+}
+
+function clearLocalPreviewUrl() {
+  if (state.localPreviewUrl) {
+    URL.revokeObjectURL(state.localPreviewUrl);
+    state.localPreviewUrl = null;
+  }
+}
+
+function getImageDimensions(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error('无法读取图片内容，请确认文件未损坏。'));
+    image.src = url;
+  });
+}
+
+async function renderLocalUploadPreview(file) {
+  clearLocalPreviewUrl();
+  const previewUrl = URL.createObjectURL(file);
+  state.localPreviewUrl = previewUrl;
+
+  try {
+    const dimensions = await getImageDimensions(previewUrl);
+    renderUploadedPreview({
+      public_url: previewUrl,
+      original_filename: file.name || '本地商品图',
+      width: dimensions.width,
+      height: dimensions.height,
+      content_type: `${file.type || '未知类型'} · ${formatFileSize(file.size)}`,
+    });
+    setPreviewImage(previewUrl, '已选择');
+    return dimensions;
+  } catch (error) {
+    clearLocalPreviewUrl();
+    throw error;
+  }
+}
+
 function renderLandingTemplates() {
   const container = $('#landingTemplates');
   if (!container) return;
@@ -167,28 +244,55 @@ function setPreviewImage(url, status = '已生成') {
 function renderUploadedPreview(source) {
   const container = $('#uploadedPreview');
   if (!container || !source) return;
+  const sizeText = Number.isFinite(source.width) && Number.isFinite(source.height)
+    ? `${source.width} × ${source.height}`
+    : '尺寸读取中';
+  const detailText = [sizeText, source.content_type].filter(Boolean).join(' · ');
   container.innerHTML = `
     <img src="${escapeHTML(source.public_url)}" alt="上传的原始商品图" />
-    <p><b>${escapeHTML(source.original_filename)}</b><small>${escapeHTML(source.width)} × ${escapeHTML(source.height)} · ${escapeHTML(source.content_type)}</small></p>
+    <p><b>${escapeHTML(source.original_filename)}</b><small>${escapeHTML(detailText)}</small></p>
   `;
 }
 
 async function handleUpload(file) {
   if (!file) return;
   const status = $('#uploadStatus');
+  const validation = validateUploadFile(file);
+
+  if (!validation.ok) {
+    if (status) status.textContent = validation.message;
+    toast(validation.message, 'error');
+    return;
+  }
+
+  state.sourceImage = null;
+  if (status) status.textContent = '已选择图片，正在生成本地预览...';
+
+  try {
+    await renderLocalUploadPreview(file);
+  } catch (error) {
+    const message = error.message || '无法读取图片内容，请重新选择一张商品图。';
+    if (status) status.textContent = message;
+    toast(message, 'error');
+    return;
+  }
+
   const form = new FormData();
   form.append('file', file);
-  status.textContent = '正在上传图片...';
+  if (status) status.textContent = '本地预览已生成，正在上传图片...';
+
   try {
     const source = await api('/api/upload', { method: 'POST', body: form });
     state.sourceImage = source;
     renderUploadedPreview(source);
     setPreviewImage(source.public_url, '已上传');
-    status.textContent = '上传完成，可以生成主图。';
+    clearLocalPreviewUrl();
+    if (status) status.textContent = '上传完成，可以生成主图。';
     toast('图片上传成功', 'success');
   } catch (error) {
-    status.textContent = error.message;
-    toast(error.message, 'error');
+    const message = `上传失败：${error.message}`;
+    if (status) status.textContent = `${message}。本地预览已保留，请检查网络或稍后重试。`;
+    toast(message, 'error');
   }
 }
 
@@ -379,7 +483,11 @@ function bindEvents() {
     });
   });
 
-  $('#fileInput')?.addEventListener('change', event => handleUpload(event.target.files?.[0]));
+  $('#fileInput')?.addEventListener('change', event => {
+    const file = event.target.files?.[0];
+    handleUpload(file);
+    event.target.value = '';
+  });
 
   const dropzone = $('.dropzone');
   dropzone?.addEventListener('dragover', event => {
@@ -425,6 +533,8 @@ function bindEvents() {
       button.classList.add('active');
       if (button.dataset.tab === 'original' && state.sourceImage) {
         setPreviewImage(state.sourceImage.public_url, '原图');
+      } else if (button.dataset.tab === 'original' && state.localPreviewUrl) {
+        setPreviewImage(state.localPreviewUrl, '已选择');
       } else if (button.dataset.tab === 'white' && state.lastTask?.assets?.length) {
         setPreviewImage(getPrimaryAsset(state.lastTask).public_url, '已生成');
       } else if (button.dataset.tab === 'compliance') {
