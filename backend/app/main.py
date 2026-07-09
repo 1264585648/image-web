@@ -7,6 +7,8 @@ from app.config import get_settings
 from app.database import init_db
 
 settings = get_settings()
+settings.storage_path
+
 app = FastAPI(title=settings.app_name, version="0.1.0")
 
 app.add_middleware(
@@ -20,7 +22,6 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup() -> None:
-    settings.storage_path
     init_db()
 
 
