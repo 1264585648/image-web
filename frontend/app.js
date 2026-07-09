@@ -12,6 +12,8 @@ const state = {
   sourceImage: null,
   selectedSize: { width: 1600, height: 1600 },
   background: 'white',
+  customBackgroundColor: '#F7F9FC',
+  customBackgroundActive: false,
   lastTask: null,
   localPreviewUrl: null,
   customSizeActive: false,
@@ -36,15 +38,7 @@ const assetLabels = {
   'hd-2000px': '2000px 高清图',
 };
 
-const assetOrder = [
-  'amazon-white-main',
-  'temu-white-main',
-  'shopify-main',
-  'mobile-cover-4x5',
-  'transparent-png',
-  'soft-shadow-packshot',
-  'hd-2000px',
-];
+const assetOrder = ['amazon-white-main', 'temu-white-main', 'shopify-main', 'mobile-cover-4x5', 'transparent-png', 'soft-shadow-packshot', 'hd-2000px'];
 
 const fallbackTemplates = [
   { id: 'amazon-white-main', name: 'Amazon 白底主图', width: 2000, height: 2000, background: 'white', product_fill_ratio: 0.85, shadow_enabled: false },
@@ -108,26 +102,19 @@ function formatFileSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function validateUploadFile(file) {
-  if (!file) {
-    return { ok: false, message: '请选择一张商品图片。' };
-  }
+function normalizeHexColor(value) {
+  const color = String(value || '').trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color.toUpperCase() : null;
+}
 
+function validateUploadFile(file) {
+  if (!file) return { ok: false, message: '请选择一张商品图片。' };
   const extension = getFileExtension(file);
   const typeAllowed = ALLOWED_UPLOAD_TYPES.has(file.type);
   const extensionAllowed = ALLOWED_UPLOAD_EXTENSIONS.has(extension);
-  if (!typeAllowed && !extensionAllowed) {
-    return { ok: false, message: '仅支持 JPG、PNG、WebP 格式的商品图片。' };
-  }
-
-  if (!file.size) {
-    return { ok: false, message: '图片文件为空，请重新选择。' };
-  }
-
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return { ok: false, message: `图片过大，当前 ${formatFileSize(file.size)}，最大支持 ${MAX_UPLOAD_MB}MB。` };
-  }
-
+  if (!typeAllowed && !extensionAllowed) return { ok: false, message: '仅支持 JPG、PNG、WebP 格式的商品图片。' };
+  if (!file.size) return { ok: false, message: '图片文件为空，请重新选择。' };
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, message: `图片过大，当前 ${formatFileSize(file.size)}，最大支持 ${MAX_UPLOAD_MB}MB。` };
   return { ok: true, message: '' };
 }
 
@@ -151,7 +138,6 @@ async function renderLocalUploadPreview(file) {
   clearLocalPreviewUrl();
   const previewUrl = URL.createObjectURL(file);
   state.localPreviewUrl = previewUrl;
-
   try {
     const dimensions = await getImageDimensions(previewUrl);
     renderUploadedPreview({
@@ -187,10 +173,7 @@ function renderTemplateOptions() {
     <button type="button" data-template="${escapeHTML(template.id)}" class="${template.id === state.selectedTemplateId ? 'active' : ''}">${getTemplateName(template)}</button>
   `).join('');
 
-  $all('[data-template]').forEach(button => {
-    button.addEventListener('click', () => selectTemplate(button.dataset.template));
-  });
-
+  $all('[data-template]').forEach(button => button.addEventListener('click', () => selectTemplate(button.dataset.template)));
   $all('[data-template-card]').forEach(card => {
     card.addEventListener('click', () => {
       selectTemplate(card.dataset.templateCard);
@@ -209,18 +192,50 @@ function updateCustomSizeButton() {
   const customButton = $('#customSizeBtn');
   if (!customButton) return;
   const presetButton = findSelectedPresetButton();
-  customButton.textContent = state.customSizeActive || !presetButton
-    ? `${state.selectedSize.width} × ${state.selectedSize.height}`
-    : '自定义';
+  customButton.textContent = state.customSizeActive || !presetButton ? `${state.selectedSize.width} × ${state.selectedSize.height}` : '自定义';
 }
 
 function setSelectedSize(width, height, options = {}) {
   state.selectedSize = { width, height };
-  const presetMatch = $all('#sizeOptions button:not([data-custom])').some(button => {
-    return Number(button.dataset.width) === width && Number(button.dataset.height) === height;
-  });
+  const presetMatch = $all('#sizeOptions button:not([data-custom])').some(button => Number(button.dataset.width) === width && Number(button.dataset.height) === height);
   state.customSizeActive = Boolean(options.custom) || !presetMatch;
   updateCustomSizeButton();
+  syncActiveButtons();
+}
+
+function updateCustomColorControls() {
+  const colorInput = $('#customColorInput');
+  const colorText = $('#customColorText');
+  const colorRow = $('#customColorRow');
+  const customButton = $('#customColorBtn');
+  if (colorInput) colorInput.value = state.customBackgroundColor;
+  if (colorText) colorText.textContent = state.customBackgroundColor;
+  if (colorRow) colorRow.hidden = !state.customBackgroundActive;
+  if (customButton) customButton.textContent = state.customBackgroundActive ? `自定义 ${state.customBackgroundColor}` : '自定义颜色';
+}
+
+function setBackground(background, options = {}) {
+  if (background === 'custom') {
+    state.customBackgroundActive = true;
+    state.background = state.customBackgroundColor;
+  } else {
+    state.customBackgroundActive = Boolean(options.custom);
+    state.background = background;
+  }
+  updateCustomColorControls();
+  syncActiveButtons();
+}
+
+function setCustomBackgroundColor(value) {
+  const color = normalizeHexColor(value);
+  if (!color) {
+    toast('请选择有效的 6 位十六进制颜色。', 'error');
+    return;
+  }
+  state.customBackgroundColor = color;
+  state.customBackgroundActive = true;
+  state.background = color;
+  updateCustomColorControls();
   syncActiveButtons();
 }
 
@@ -230,6 +245,7 @@ function selectTemplate(templateId) {
   if (template) {
     state.selectedSize = { width: template.width, height: template.height };
     state.customSizeActive = false;
+    state.customBackgroundActive = false;
     state.background = template.background || 'white';
     $('#ratioRange').value = Math.round((template.product_fill_ratio || 0.85) * 100);
     $('#ratioText').textContent = `${$('#ratioRange').value}%`;
@@ -238,6 +254,7 @@ function selectTemplate(templateId) {
   renderLandingTemplates();
   renderTemplateOptions();
   updateCustomSizeButton();
+  updateCustomColorControls();
   syncActiveButtons();
 }
 
@@ -252,8 +269,13 @@ function syncActiveButtons() {
     const height = Number(button.dataset.height);
     button.classList.toggle('active', !state.customSizeActive && width === state.selectedSize.width && height === state.selectedSize.height);
   });
+
   $all('#backgroundOptions button').forEach(button => {
-    button.classList.toggle('active', button.dataset.bg === state.background);
+    if (button.dataset.bg === 'custom') {
+      button.classList.toggle('active', state.customBackgroundActive);
+      return;
+    }
+    button.classList.toggle('active', !state.customBackgroundActive && button.dataset.bg === state.background);
   });
 }
 
@@ -279,9 +301,7 @@ function setPreviewImage(url, status = '已生成') {
 function renderUploadedPreview(source) {
   const container = $('#uploadedPreview');
   if (!container || !source) return;
-  const sizeText = Number.isFinite(source.width) && Number.isFinite(source.height)
-    ? `${source.width} × ${source.height}`
-    : '尺寸读取中';
+  const sizeText = Number.isFinite(source.width) && Number.isFinite(source.height) ? `${source.width} × ${source.height}` : '尺寸读取中';
   const detailText = [sizeText, source.content_type].filter(Boolean).join(' · ');
   container.innerHTML = `
     <img src="${escapeHTML(source.public_url)}" alt="上传的原始商品图" />
@@ -311,12 +331,8 @@ function closeCustomSizeModal() {
 
 function parseOutputSize(value, label) {
   const number = Number(value);
-  if (!Number.isInteger(number)) {
-    return { ok: false, message: `${label}必须是整数。` };
-  }
-  if (number < MIN_OUTPUT_SIZE || number > MAX_OUTPUT_SIZE) {
-    return { ok: false, message: `${label}必须在 ${MIN_OUTPUT_SIZE} 到 ${MAX_OUTPUT_SIZE} 像素之间。` };
-  }
+  if (!Number.isInteger(number)) return { ok: false, message: `${label}必须是整数。` };
+  if (number < MIN_OUTPUT_SIZE || number > MAX_OUTPUT_SIZE) return { ok: false, message: `${label}必须在 ${MIN_OUTPUT_SIZE} 到 ${MAX_OUTPUT_SIZE} 像素之间。` };
   return { ok: true, value: number };
 }
 
@@ -325,7 +341,6 @@ function applyCustomSize() {
   const heightInput = $('#customHeightInput');
   const error = $('#customSizeError');
   if (!widthInput || !heightInput) return;
-
   const width = parseOutputSize(widthInput.value, '宽度');
   const height = parseOutputSize(heightInput.value, '高度');
   const message = !width.ok ? width.message : (!height.ok ? height.message : '');
@@ -334,7 +349,6 @@ function applyCustomSize() {
     toast(message, 'error');
     return;
   }
-
   setSelectedSize(width.value, height.value, { custom: true });
   closeCustomSizeModal();
   toast(`已使用自定义尺寸 ${width.value} × ${height.value}`, 'success');
@@ -344,7 +358,6 @@ async function handleUpload(file) {
   if (!file) return;
   const status = $('#uploadStatus');
   const validation = validateUploadFile(file);
-
   if (!validation.ok) {
     if (status) status.textContent = validation.message;
     toast(validation.message, 'error');
@@ -353,7 +366,6 @@ async function handleUpload(file) {
 
   state.sourceImage = null;
   if (status) status.textContent = '已选择图片，正在生成本地预览...';
-
   try {
     await renderLocalUploadPreview(file);
   } catch (error) {
@@ -366,7 +378,6 @@ async function handleUpload(file) {
   const form = new FormData();
   form.append('file', file);
   if (status) status.textContent = '本地预览已生成，正在上传图片...';
-
   try {
     const source = await api('/api/upload', { method: 'POST', body: form });
     state.sourceImage = source;
@@ -445,9 +456,7 @@ function getPrimaryAsset(task) {
 
 function renderTask(task) {
   const asset = getPrimaryAsset(task);
-  if (asset?.public_url) {
-    setPreviewImage(asset.public_url, '已生成');
-  }
+  if (asset?.public_url) setPreviewImage(asset.public_url, '已生成');
   renderResults(task.assets || []);
   renderCompliance(asset?.compliance, task.compliance_score);
 }
@@ -467,7 +476,6 @@ function renderResults(assets) {
     grid.innerHTML = `<div class="empty-state">还没有生成结果。上传商品图后点击「生成主图」。</div>`;
     return;
   }
-
   grid.innerHTML = sortedAssets(assets).map(asset => {
     const label = assetLabels[asset.output_type] || asset.output_type;
     const badge = asset.output_type === state.selectedTemplateId ? '<span class="pass-pill success">当前模板</span>' : '';
@@ -481,10 +489,8 @@ function renderResults(assets) {
           <button type="button" data-regenerate="true">重新生成</button>
           <button type="button" data-report="true">查看合规报告</button>
         </div>
-      </article>
-    `;
+      </article>`;
   }).join('');
-
   $all('[data-regenerate]').forEach(button => button.addEventListener('click', generateImage));
   $all('[data-report]').forEach(button => button.addEventListener('click', () => $('#complianceCard')?.scrollIntoView({ behavior: 'smooth' })));
 }
@@ -495,14 +501,12 @@ function renderCompliance(compliance, fallbackScore) {
   const pill = $('#complianceCard .pass-pill');
   const score = compliance?.score ?? fallbackScore;
   scoreText.textContent = typeof score === 'number' ? Math.round(score) : '--';
-
   if (!compliance) {
     list.innerHTML = '<li>暂无合规报告</li>';
     pill.textContent = '待检测';
     pill.className = 'pass-pill';
     return;
   }
-
   const checks = compliance.checks || {};
   const metrics = compliance.metrics || {};
   const warnings = compliance.warnings || [];
@@ -513,12 +517,10 @@ function renderCompliance(compliance, fallbackScore) {
     { ok: checks.fill_ratio_ok, text: `商品占比 ${formatRatio(fillRatio)}` },
     { ok: checks.size_ok, text: '尺寸符合要求' },
   ];
-
   list.innerHTML = [
     ...rows.map(row => `<li class="${row.ok ? 'pass' : 'warn'}">${escapeHTML(row.text)}</li>`),
     ...warnings.map(warn => `<li class="warn">${escapeHTML(warn)}</li>`),
   ].join('');
-
   if (typeof score === 'number' && score >= 85) {
     pill.textContent = '合规通过';
     pill.className = 'pass-pill success';
@@ -564,14 +566,12 @@ async function loadHistory() {
 function bindEvents() {
   $all('[data-scroll]').forEach(button => {
     button.addEventListener('click', () => {
-      const target = button.dataset.scroll;
-      document.getElementById(target)?.scrollIntoView({ behavior: 'smooth' });
+      document.getElementById(button.dataset.scroll)?.scrollIntoView({ behavior: 'smooth' });
     });
   });
 
   $('#fileInput')?.addEventListener('change', event => {
-    const file = event.target.files?.[0];
-    handleUpload(file);
+    handleUpload(event.target.files?.[0]);
     event.target.value = '';
   });
 
@@ -619,9 +619,11 @@ function bindEvents() {
 
   $all('#backgroundOptions button').forEach(button => {
     button.addEventListener('click', () => {
-      state.background = button.dataset.bg;
-      syncActiveButtons();
+      setBackground(button.dataset.bg);
     });
+  });
+  $('#customColorInput')?.addEventListener('input', event => {
+    setCustomBackgroundColor(event.target.value);
   });
 
   $('#generateBtn')?.addEventListener('click', generateImage);
@@ -647,6 +649,7 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
+  updateCustomColorControls();
   await loadTemplates();
   await loadHistory();
 }
