@@ -41,7 +41,6 @@ def _resolve_frontend_dir() -> Path | None:
 
 
 app.include_router(router)
-app.mount("/storage", StaticFiles(directory=settings.storage_dir), name="storage")
 
 frontend_dir = _resolve_frontend_dir()
 if frontend_dir is not None:
