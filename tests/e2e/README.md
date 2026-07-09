@@ -4,9 +4,11 @@ These tests exercise the deployed HTTP app end to end:
 
 - static frontend shell
 - health and template APIs
+- auth registration, Bearer and cookie login, logout, and protected-route guards
+- per-user access isolation for source images, tasks, history, and downloads
+- signed source image and generated asset URLs
 - image upload
 - async generation and task polling
-- generated asset URLs
 - task zip download
 - history lookup
 - retry guard for non-failed tasks

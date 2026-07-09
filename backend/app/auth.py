@@ -117,12 +117,13 @@ def verify_access_token(token: str) -> dict[str, Any]:
 
 def set_auth_cookie(response: Response, token: str) -> None:
     settings = get_settings()
+    secure_cookie = settings.public_base_url.lower().startswith("https://")
     response.set_cookie(
         key=settings.auth_cookie_name,
         value=token,
         max_age=settings.auth_token_expire_hours * 3600,
         httponly=True,
-        secure=settings.environment != "local",
+        secure=secure_cookie,
         samesite="lax",
         path="/",
     )
