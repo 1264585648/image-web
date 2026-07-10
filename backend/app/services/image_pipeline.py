@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+
 from PIL import Image, ImageColor, ImageEnhance, ImageFilter, ImageOps
 
 from app.schemas import GenerateRequest
+from app.services.compliance import ComplianceResult, analyze_image
 from app.templates import get_template
-from app.services.compliance import analyze_image, ComplianceResult
 
 
 def _open_image(path: str | Path) -> Image.Image:
@@ -15,9 +16,19 @@ def _open_image(path: str | Path) -> Image.Image:
     return image.convert("RGBA")
 
 
+def _has_meaningful_transparency(image: Image.Image) -> bool:
+    if image.mode != "RGBA":
+        return False
+    histogram = image.getchannel("A").histogram()
+    total = max(image.width * image.height, 1)
+    transparent_ratio = sum(histogram[:250]) / total
+    visible_ratio = sum(histogram[16:]) / total
+    return transparent_ratio >= 0.002 and visible_ratio >= 0.002
+
+
 def _remove_background(image: Image.Image) -> Image.Image:
-    # Preserve existing transparency when users upload PNG/WebP with alpha.
-    if image.mode == "RGBA" and image.getchannel("A").getextrema()[0] < 255:
+    # Preserve existing transparency when users upload PNG/WebP with a usable alpha mask.
+    if _has_meaningful_transparency(image):
         return image
 
     try:
@@ -26,11 +37,13 @@ def _remove_background(image: Image.Image) -> Image.Image:
         buffer = io.BytesIO()
         image.save(buffer, format="PNG")
         output = remove(buffer.getvalue())
-        return Image.open(io.BytesIO(output)).convert("RGBA")
-    except Exception:
-        # Fallback keeps the original image as the subject. This makes local dev easy,
-        # but production should install rembg or connect a commercial background-removal API.
-        return image.convert("RGBA")
+        subject = Image.open(io.BytesIO(output)).convert("RGBA")
+    except Exception as exc:
+        raise RuntimeError("自动抠图失败，请换一张主体更清晰、背景更干净的商品图后重试。") from exc
+
+    if not _has_meaningful_transparency(subject):
+        raise RuntimeError("自动抠图未能分离商品主体，请换一张主体与背景区分更明显的商品图后重试。")
+    return subject
 
 
 def _repair_alpha_edge(image: Image.Image) -> Image.Image:
