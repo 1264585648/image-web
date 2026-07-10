@@ -269,7 +269,9 @@
       event.stopImmediatePropagation();
       try {
         button.disabled = true;
-        button.textContent = '下载中...';
+        button.classList.add('is-loading');
+        if (typeof setButtonContent === 'function') setButtonContent(button, '下载中…', 'download');
+        else button.textContent = '下载中…';
         const response = await fetch(`${apiBase()}/api/tasks/${encodeURIComponent(task.id)}/download.zip`);
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
@@ -287,6 +289,7 @@
       } catch (err) {
         say(err.message || '下载失败，请稍后重试', 'error');
       } finally {
+        button.classList.remove('is-loading');
         if (typeof window.updateDownloadAllButton === 'function') window.updateDownloadAllButton(task);
         else {
           button.disabled = false;

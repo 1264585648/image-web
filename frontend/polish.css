@@ -1,0 +1,110 @@
+/* Interaction, accessibility, and responsive refinements. */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.dropzone:hover,
+.dropzone.dragging {
+  border-color: var(--blue);
+  background: #eef5ff;
+  box-shadow: 0 0 0 4px rgba(11, 92, 255, .08);
+}
+
+.template-card {
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.template-card:hover {
+  transform: translateY(-3px);
+  border-color: #b9cbef;
+  box-shadow: 0 16px 34px rgba(11, 23, 54, .1);
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(11, 92, 255, .28);
+  outline-offset: 3px;
+}
+
+.status-text[role="status"] {
+  min-height: 20px;
+}
+
+.generated-badge {
+  z-index: 2;
+}
+
+#complianceDetailModal table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+#complianceDetailModal table td:last-child {
+  text-align: right;
+  font-weight: 850;
+  color: var(--navy);
+}
+
+#complianceDetailModal table td.report-pass {
+  color: var(--green);
+}
+
+#complianceDetailModal table td.report-warn {
+  color: var(--orange);
+}
+
+@media (max-width: 440px) {
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-actions .primary-btn {
+    display: none;
+  }
+
+  .credit {
+    height: 38px;
+  }
+
+  .hero h1 {
+    font-size: 36px;
+  }
+
+  .section-shell {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+}
+
+@media (max-width: 640px) {
+  #complianceDetailModal .modal-card > div:nth-of-type(2) {
+    grid-template-columns: 1fr !important;
+  }
+
+  #complianceDetailModal .modal-card > div:nth-of-type(2) section {
+    grid-column: 1 !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

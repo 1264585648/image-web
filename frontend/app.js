@@ -20,6 +20,7 @@ const state = {
   historyTasks: [],
   localPreviewUrl: null,
   customSizeActive: false,
+  modalTrigger: null,
 };
 
 const templateIllustrations = {
@@ -72,9 +73,20 @@ function escapeHTML(value) {
 function toast(message, type = '') {
   const el = document.createElement('div');
   el.className = `toast ${type}`.trim();
+  el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  el.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 3200);
+}
+
+function setButtonContent(button, label, iconName = '') {
+  if (!button) return;
+  if (window.ProductShotUI?.setButtonContent) {
+    window.ProductShotUI.setButtonContent(button, label, iconName);
+    return;
+  }
+  button.textContent = label;
 }
 
 async function api(path, options = {}) {
@@ -179,7 +191,7 @@ function renderLandingTemplates() {
   const container = $('#landingTemplates');
   if (!container) return;
   container.innerHTML = state.templates.map(template => `
-    <article class="card template-card ${template.id === state.selectedTemplateId ? 'active' : ''}" data-template-card="${escapeHTML(template.id)}">
+    <article class="card template-card ${template.id === state.selectedTemplateId ? 'active' : ''}" data-template-card="${escapeHTML(template.id)}" role="button" tabindex="0" aria-pressed="${template.id === state.selectedTemplateId}">
       <div class="template-thumb ${template.background === 'transparent' ? 'checker-bg' : ''}">${templateIllustrations[template.id] || '<div class="bottle"></div>'}</div>
       <h3>${getTemplateName(template)}</h3>
     </article>
@@ -195,9 +207,16 @@ function renderTemplateOptions() {
 
   $all('[data-template]').forEach(button => button.addEventListener('click', () => selectTemplate(button.dataset.template)));
   $all('[data-template-card]').forEach(card => {
-    card.addEventListener('click', () => {
+    const chooseTemplate = () => {
       selectTemplate(card.dataset.templateCard);
       $('#dashboard')?.scrollIntoView({ behavior: 'smooth' });
+    };
+    card.addEventListener('click', chooseTemplate);
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        chooseTemplate();
+      }
     });
   });
 }
@@ -308,7 +327,7 @@ function updateDownloadAllButton(task = state.lastTask) {
   if (!button) return;
   const canDownload = Boolean(task?.id && task.assets?.length);
   button.disabled = !canDownload;
-  button.textContent = canDownload ? `下载全部 ${task.assets.length} 张` : '下载全部';
+  setButtonContent(button, canDownload ? `下载全部 ${task.assets.length} 张` : '下载全部', 'download');
 }
 
 function handleDownloadAll() {
@@ -445,6 +464,7 @@ function openCustomSizeModal() {
   const heightInput = $('#customHeightInput');
   const error = $('#customSizeError');
   if (!modal || !widthInput || !heightInput) return;
+  state.modalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   widthInput.value = state.selectedSize.width;
   heightInput.value = state.selectedSize.height;
   if (error) error.textContent = '';
@@ -457,6 +477,8 @@ function closeCustomSizeModal() {
   const error = $('#customSizeError');
   if (error) error.textContent = '';
   if (modal) modal.hidden = true;
+  state.modalTrigger?.focus?.();
+  state.modalTrigger = null;
 }
 
 function parseOutputSize(value, label) {
@@ -549,9 +571,11 @@ async function generateImage() {
   const mobileButton = $('#mobileGenerateBtn');
   button.disabled = true;
   mobileButton.disabled = true;
+  button.classList.add('is-loading');
+  mobileButton.classList.add('is-loading');
   updateDownloadAllButton(null);
-  button.textContent = '生成中...';
-  mobileButton.textContent = '生成中...';
+  setButtonContent(button, '生成中…', 'magic');
+  setButtonContent(mobileButton, '生成中…', 'magic');
   $('#generatedBadge').textContent = '生成中';
   try {
     const task = await api('/api/generate', {
@@ -578,8 +602,10 @@ async function generateImage() {
   } finally {
     button.disabled = false;
     mobileButton.disabled = false;
-    button.textContent = '✦ 生成主图';
-    mobileButton.textContent = '✦ 生成主图';
+    button.classList.remove('is-loading');
+    mobileButton.classList.remove('is-loading');
+    setButtonContent(button, '生成主图', 'magic');
+    setButtonContent(mobileButton, '生成主图', 'magic');
   }
 }
 
@@ -810,6 +836,11 @@ async function loadHistory(options = {}) {
 }
 
 function bindEvents() {
+  $('#uploadStatus')?.setAttribute('role', 'status');
+  $('#uploadStatus')?.setAttribute('aria-live', 'polite');
+  $('#generatedBadge')?.setAttribute('role', 'status');
+  $('#generatedBadge')?.setAttribute('aria-live', 'polite');
+
   $all('[data-scroll]').forEach(button => {
     button.addEventListener('click', () => {
       document.getElementById(button.dataset.scroll)?.scrollIntoView({ behavior: 'smooth' });

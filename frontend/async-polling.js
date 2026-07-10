@@ -10,10 +10,15 @@ function getGenerateButtons() {
   return [$('#generateBtn'), $('#mobileGenerateBtn')].filter(Boolean);
 }
 
-function setGenerateBusy(isBusy, text = '生成中...') {
+function setGenerateBusy(isBusy, text = '生成中…') {
   getGenerateButtons().forEach(button => {
     button.disabled = isBusy;
-    button.textContent = isBusy ? text : '✦ 生成主图';
+    button.classList.toggle('is-loading', isBusy);
+    if (typeof setButtonContent === 'function') {
+      setButtonContent(button, isBusy ? text : '生成主图', 'magic');
+    } else {
+      button.textContent = isBusy ? text : '生成主图';
+    }
   });
 }
 
@@ -46,7 +51,7 @@ function syncTaskProgressUI(task) {
   const badgeClass = task?.status === 'failed' ? 'error' : (task?.status === 'success' ? 'success' : '');
   const progressText = getTaskProgressText(task);
   setGenerationBadge(progressText, badgeClass);
-  setGenerateBusy(!terminal, task?.status === 'queued' ? '排队中...' : `生成中 ${Math.max(0, Math.min(100, Math.round(task?.progress || 0)))}%`);
+  setGenerateBusy(!terminal, task?.status === 'queued' ? '排队中…' : `生成中 ${Math.max(0, Math.min(100, Math.round(task?.progress || 0)))}%`);
 }
 
 function getGeneratePayloadWithUiOptions() {
@@ -105,7 +110,7 @@ async function generateImageWithPolling() {
     return;
   }
 
-  setGenerateBusy(true, '排队中...');
+  setGenerateBusy(true, '排队中…');
   updateDownloadAllButton(null);
   setGenerationBadge('排队中');
 
@@ -126,7 +131,7 @@ async function generateImageWithPolling() {
 }
 
 async function retryFailedTaskWithPolling(taskId) {
-  setGenerateBusy(true, '重新排队中...');
+  setGenerateBusy(true, '重新排队中…');
   updateDownloadAllButton(null);
   setGenerationBadge('重新排队中');
 
@@ -271,17 +276,33 @@ function openComplianceDetailModal() {
   const checks = compliance.checks || {};
   const metrics = compliance.metrics || {};
   const warnings = compliance.warnings || [];
+  const checkLabels = {
+    background_ok: '背景合规',
+    centered: '商品居中',
+    fill_ratio_ok: '商品占比',
+    size_ok: '画布尺寸',
+    sharp_enough: '清晰度',
+  };
+  const metricLabels = {
+    product_fill_ratio: '商品占比',
+    fill_ratio: '商品占比',
+    center_offset_x: '水平偏移',
+    center_offset_y: '垂直偏移',
+    sharpness: '清晰度',
+    white_background_ratio: '白色背景占比',
+  };
   const checkRows = Object.entries(checks).map(([key, value]) => `
-    <tr><td>${safeHTML(key)}</td><td>${value ? '通过' : '未通过'}</td></tr>
+    <tr><td>${safeHTML(checkLabels[key] || key)}</td><td class="${value ? 'report-pass' : 'report-warn'}">${value ? '通过' : '未通过'}</td></tr>
   `).join('');
   const metricRows = Object.entries(metrics).map(([key, value]) => `
-    <tr><td>${safeHTML(key)}</td><td>${safeHTML(value)}</td></tr>
+    <tr><td>${safeHTML(metricLabels[key] || key)}</td><td>${safeHTML(value)}</td></tr>
   `).join('');
   const warningRows = warnings.length
     ? warnings.map(item => `<li>${safeHTML(item)}</li>`).join('')
     : '<li>暂无警告</li>';
 
   const modal = document.createElement('div');
+  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   modal.className = 'modal-overlay';
   modal.id = 'complianceDetailModal';
   modal.innerHTML = `
@@ -312,9 +333,21 @@ function openComplianceDetailModal() {
       </div>
     </div>`;
   document.body.appendChild(modal);
+  document.documentElement.classList.add('ui-scroll-lock');
+  const close = () => {
+    modal.remove();
+    document.documentElement.classList.remove('ui-scroll-lock');
+    document.removeEventListener('keydown', onKeydown);
+    trigger?.focus?.();
+  };
+  const onKeydown = event => {
+    if (event.key === 'Escape') close();
+  };
   modal.addEventListener('click', event => {
-    if (event.target === modal || event.target.closest('[data-close-compliance-detail]')) modal.remove();
+    if (event.target === modal || event.target.closest('[data-close-compliance-detail]')) close();
   });
+  document.addEventListener('keydown', onKeydown);
+  modal.querySelector('.modal-close')?.focus();
 }
 
 function installComplianceDetailButton() {
