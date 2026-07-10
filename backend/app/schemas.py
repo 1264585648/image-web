@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -72,6 +74,71 @@ class ComplianceReport(BaseModel):
     checks: dict[str, bool]
     metrics: dict[str, float | int | str]
     warnings: list[str]
+
+
+class ComplianceAnalyzeRequest(BaseModel):
+    source_image_id: str
+    platform: str = Field(default="amazon", pattern="^(amazon|google-merchant|universal)$")
+    marketplace: str | None = Field(default="US", max_length=40)
+    image_role: str = Field(default="main", pattern="^(main|secondary|product-image)$")
+    category: str = Field(default="general", min_length=1, max_length=120)
+
+
+class ComplianceContextOut(BaseModel):
+    platform: str
+    marketplace: str | None
+    image_role: str
+    category: str
+    rule_set_version: str
+
+
+class SegmentationOut(BaseModel):
+    status: str
+    confidence: float
+    mask_url: str | None = None
+    bbox: list[int] | None = None
+    foreground_area_ratio: float
+    touches_edge: bool
+    rectangularity: float
+    source: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ComplianceIssueOut(BaseModel):
+    id: str
+    rule_id: str
+    severity: str
+    status: str
+    title: str
+    description: str
+    confidence: float
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    auto_fix: str | None = None
+    requires_confirmation: bool = False
+
+
+class FixActionOut(BaseModel):
+    id: str
+    issue_id: str
+    action: str
+    risk: str
+    selected_by_default: bool
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    requires_confirmation: bool = False
+
+
+class ComplianceAnalysisOut(BaseModel):
+    id: str
+    source_image_id: str
+    context: ComplianceContextOut
+    status: str
+    score: float
+    segmentation: SegmentationOut
+    metrics: dict[str, Any]
+    issues: list[ComplianceIssueOut]
+    fix_plan: list[FixActionOut]
+    created_at: datetime
 
 
 class AssetOut(BaseModel):

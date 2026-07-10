@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.compliance_routes import router as compliance_router
 from app.api.routes import router
 from app.config import get_settings
 from app.database import init_db
@@ -41,6 +42,7 @@ def _resolve_frontend_dir() -> Path | None:
 
 
 app.include_router(router)
+app.include_router(compliance_router)
 
 frontend_dir = _resolve_frontend_dir()
 if frontend_dir is not None:

@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +18,7 @@ class User(Base):
 
     source_images: Mapped[list["SourceImage"]] = relationship(back_populates="user")
     tasks: Mapped[list["GenerationTask"]] = relationship(back_populates="user")
+    compliance_analyses: Mapped[list["ComplianceAnalysis"]] = relationship(back_populates="user")
 
 
 class SourceImage(Base):
@@ -34,6 +36,7 @@ class SourceImage(Base):
 
     user: Mapped[User | None] = relationship(back_populates="source_images")
     tasks: Mapped[list["GenerationTask"]] = relationship(back_populates="source_image")
+    compliance_analyses: Mapped[list["ComplianceAnalysis"]] = relationship(back_populates="source_image")
 
 
 class GenerationTask(Base):
@@ -71,3 +74,29 @@ class GeneratedAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     task: Mapped[GenerationTask] = relationship(back_populates="assets")
+
+
+class ComplianceAnalysis(Base):
+    __tablename__ = "compliance_analyses"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    source_image_id: Mapped[str] = mapped_column(String(36), ForeignKey("source_images.id"), index=True)
+    platform: Mapped[str] = mapped_column(String(40))
+    marketplace: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    image_role: Mapped[str] = mapped_column(String(40), default="main")
+    category: Mapped[str] = mapped_column(String(120), default="general")
+    rule_set_version: Mapped[str] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(20))
+    score: Mapped[float] = mapped_column(Float)
+    segmentation_status: Mapped[str] = mapped_column(String(30))
+    segmentation_confidence: Mapped[float] = mapped_column(Float)
+    segmentation_json: Mapped[str] = mapped_column(Text)
+    mask_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metrics_json: Mapped[str] = mapped_column(Text)
+    issues_json: Mapped[str] = mapped_column(Text)
+    fix_plan_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    user: Mapped[User] = relationship(back_populates="compliance_analyses")
+    source_image: Mapped[SourceImage] = relationship(back_populates="compliance_analyses")
