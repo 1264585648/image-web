@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import io
 import sys
+import types
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from PIL import Image, ImageDraw
 
+from app.services.image_pipeline import _remove_background
 from app.services.precheck import analyze_source_image, segment_subject
 
 
@@ -69,3 +73,16 @@ def test_rembg_failure_never_falls_back_to_original_image() -> None:
     assert result.mask is None
     assert result.confidence == 0
     assert any("未将原始矩形图片" in warning for warning in result.warnings)
+
+
+def test_generation_pipeline_reports_background_removal_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_rembg = types.ModuleType("rembg")
+
+    def broken_remove(_payload: bytes) -> bytes:
+        raise RuntimeError("model unavailable")
+
+    fake_rembg.remove = broken_remove  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "rembg", fake_rembg)
+
+    with pytest.raises(RuntimeError, match="自动抠图失败"):
+        _remove_background(Image.new("RGB", (240, 240), (230, 230, 230)))
